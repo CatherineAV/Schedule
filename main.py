@@ -1,13 +1,15 @@
 import flet as ft
+import create_db as db
 
 # Цветовые палитры (можно будет переключать, сейчас используем первую)
-PALETTE1 = ["#DCAEB1", "#E3BEAB", "#F8EDD1", "#CED5B3", "#A0BAB9"]
-PALETTE2 = ["#E1ECF0", "#BADDE3", "#C5CFE8", "#ECD2D1", "#D0E7CA"]
+PALETTE = ["#18363E", "#5F97AA", "#2D5F6E", "#3E88A5", "#93C4D1"]
+
+db.init_db()
 
 
 def main(page: ft.Page):
     page.title = "Генератор расписания"
-    page.bgcolor = PALETTE2[0]   # фон страницы (мягкий бежевый)
+    page.bgcolor = PALETTE[4]
     page.horizontal_alignment = "center"
     page.vertical_alignment = "start"
 
@@ -32,7 +34,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "🗁 Данные",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,
                 ),
@@ -40,7 +42,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "⛭ Настройки генерации",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
@@ -48,7 +50,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "▷ Сгенерировать",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
@@ -63,7 +65,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "↩ Назад",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
@@ -72,7 +74,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "🅯 Группы",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
@@ -80,7 +82,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "🕮 Предметы",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
@@ -88,7 +90,7 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "㉆ Преподаватели",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
@@ -96,31 +98,39 @@ def main(page: ft.Page):
             ft.ElevatedButton(
                 "⛯ Территории",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[1],
+                    bgcolor=PALETTE[2],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
                 on_click=lambda e: render_data_pane("Территории")),
+            ft.ElevatedButton(
+                "◫ Кабинеты",
+                style=ft.ButtonStyle(
+                    bgcolor=PALETTE[2],
+                    color="white",
+                    padding=20,  # внутренние отступы
+                ),
+                on_click=lambda e: render_data_pane("Кабинеты")),
         ])
         content.content = ft.Text("Раздел Данные. Выберите, что просматривать.", size=16)
         page.update()
 
     def render_settings(e=None):
-        content.content = ft.Text("Настройки генерации.", size=16, color=PALETTE1[0])
+        content.content = ft.Text("Настройки генерации.", size=16, color=PALETTE[0])
         page.update()
 
     def render_generate(e=None):
-        content.content = ft.Text("Сгенерировать расписание.", size=16, color=PALETTE1[1])
+        content.content = ft.Text("Сгенерировать расписание.", size=16, color=PALETTE[0])
         page.update()
 
     def render_data_pane(section_name):
         content.content = ft.Column([
-            ft.Text(section_name, size=20, weight="bold", color=PALETTE1[4]),
+            ft.Text(section_name, size=20, weight="bold", color=PALETTE[2]),
             ft.Text(f"Здесь будет список: {section_name}", size=14),
             ft.ElevatedButton(
                 f"Добавить",
                 style=ft.ButtonStyle(
-                    bgcolor=PALETTE2[4],
+                    bgcolor=PALETTE[3],
                     color="white",
                     padding=20,  # внутренние отступы
                 ),
@@ -138,7 +148,7 @@ def main(page: ft.Page):
                 ft.Container(
                     content=menu_column,
                     width=270,
-                    bgcolor=PALETTE1[4],
+                    bgcolor=PALETTE[1],
                     padding=20,
                 ),
                 content,
@@ -149,5 +159,3 @@ def main(page: ft.Page):
 
 
 ft.app(target=main)
-
-#Базы данных
