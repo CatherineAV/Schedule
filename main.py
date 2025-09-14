@@ -99,7 +99,7 @@ def main(page: ft.Page):
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
                 on_click=render_generate),
         ])
-        content.content = ft.Text("Добро пожаловать! Выберите пункт меню.", size=16)
+        content.content = ft.Text("Добро пожаловать! Выберите пункт меню.", size=16, color=PALETTE[0])
         page.update()
 
     def render_data_menu(e=None):
@@ -131,7 +131,7 @@ def main(page: ft.Page):
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
                 on_click=lambda e: render_data_pane("Кабинеты")),
         ])
-        content.content = ft.Text("Раздел Данные. Выберите, что просматривать.", size=16)
+        content.content = ft.Text("Раздел Данные. Выберите, что просматривать.", size=16, color=PALETTE[0])
         page.update()
 
     def render_data_pane(section_name):

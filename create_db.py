@@ -6,6 +6,11 @@ def init_db(db_name="schedule.db"):
     cursor = conn.cursor()
 
     cursor.executescript("""
+    CREATE TABLE IF NOT EXISTS Модули (
+        Код TEXT PRIMARY KEY,
+        Название TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS Группы (
         ID INTEGER PRIMARY KEY AUTOINCREMENT,
         Название TEXT NOT NULL
@@ -45,23 +50,19 @@ def init_db(db_name="schedule.db"):
         FOREIGN KEY (ТерриторияID) REFERENCES Территории(ID)
     );
 
-    CREATE TABLE IF NOT EXISTS ТипПредмета (
-        ID INTEGER PRIMARY KEY AUTOINCREMENT,
-        Название TEXT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS Предметы (
         ID INTEGER PRIMARY KEY AUTOINCREMENT,
         Название TEXT NOT NULL,
-        ТипID INTEGER,
-        Модуль TEXT,
-        Количество INTEGER,
-        FOREIGN KEY (ТипID) REFERENCES ТипПредмета(ID)
+        МодульКод TEXT NOT NULL,
+        FOREIGN KEY (МодульКод) REFERENCES Модули(Код)
     );
 
     CREATE TABLE IF NOT EXISTS Преподаватели (
         ID INTEGER PRIMARY KEY AUTOINCREMENT,
-        ФИО TEXT NOT NULL
+        ФИО TEXT NOT NULL,
+        Нагрузка INTEGER,
+        Дни TEXT,
+        Уроки INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS Преподаватель_Территория (
@@ -94,6 +95,7 @@ def init_db(db_name="schedule.db"):
         ПредметID INTEGER NOT NULL,
         ПодгруппаID INTEGER,
         ПотокID INTEGER,
+        Часы INTEGER NOT NULL,
         FOREIGN KEY (ПреподавательID) REFERENCES Преподаватели(ID),
         FOREIGN KEY (ПредметID) REFERENCES Предметы(ID),
         FOREIGN KEY (ПодгруппаID) REFERENCES Подгруппы(ID),
