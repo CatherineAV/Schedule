@@ -13,7 +13,9 @@ def init_db(db_name="schedule.db"):
 
     CREATE TABLE IF NOT EXISTS Группы (
         ID INTEGER PRIMARY KEY AUTOINCREMENT,
-        Название TEXT NOT NULL
+        Название TEXT NOT NULL,
+        Самообразование TEXT,
+        [Разговоры о важном] BOOLEAN DEFAULT 0  -- 0 = нет, 1 = да
     );
 
     CREATE TABLE IF NOT EXISTS Подгруппы (
