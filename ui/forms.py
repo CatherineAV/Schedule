@@ -19,8 +19,7 @@ class GroupForm:
             on_change=self._update_subgroup_options
         )
 
-        self.subgroup_label = ft.Text("Подгруппы", size=16, weight="bold",
-                                      color=PALETTE[2], visible=False)
+        self.subgroup_label = ft.Text("Подгруппы", size=16, weight="bold", color=PALETTE[2], visible=False)
 
         self.subgroup_checkboxes = ft.Column(visible=False)
 
@@ -106,6 +105,7 @@ class GroupForm:
                     label=option,
                     value=False,
                     label_style=ft.TextStyle(color=PALETTE[2]),
+                    border_side=ft.BorderSide(width=2, color=PALETTE[2]),
                     on_change=lambda e, opt=option: self._on_subgroup_change(opt, e.control.value)
                 )
                 self.subgroup_checkbox_refs[option] = checkbox
