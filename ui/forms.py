@@ -1,27 +1,34 @@
 import flet as ft
-from typing import Callable, List, Dict, Any
+from typing import Callable, List, Dict, Optional, Any
 from .components import PALETTE
 
 
 class GroupForm:
-    def __init__(self, on_submit: Callable, on_cancel: Callable, db_operations, toast):
+    def __init__(self, on_submit: Callable, on_cancel: Callable, db_operations, toast,
+                 edit_mode: bool = False, group_data: Optional[Dict] = None, subgroups: Optional[List[str]] = None):
         self.on_submit = on_submit
         self.on_cancel = on_cancel
         self.db_operations = db_operations
         self.toast = toast
-        self.selected_subgroups = []
+        self.edit_mode = edit_mode
+        self.original_group_name = group_data['Название'] if group_data and edit_mode else ""
+        self.selected_subgroups = subgroups if subgroups else []
         self.subgroup_checkbox_refs = {}
 
         self.group_name_field = ft.TextField(
             label="Название группы",
             border_color=PALETTE[3],
             color=PALETTE[2],
+            value=group_data['Название'] if group_data and edit_mode else "",
             on_change=self._update_subgroup_options
         )
 
-        self.subgroup_label = ft.Text("Подгруппы", size=16, weight="bold", color=PALETTE[2], visible=False)
+        self.subgroup_label = ft.Text("Подгруппы", size=16, weight="bold", color=PALETTE[2],
+                                      visible=bool(group_data and edit_mode))
 
-        self.subgroup_checkboxes = ft.Column(visible=False)
+        self.subgroup_checkboxes = ft.Column(
+            visible=bool(group_data and edit_mode)
+        )
 
         self.self_education_dropdown = ft.Dropdown(
             label="День самообразования",
@@ -38,18 +45,51 @@ class GroupForm:
                 ft.dropdown.Option("пт"),
                 ft.dropdown.Option("сб")
             ],
-            value="нет"
+            value=group_data.get('Самообразование', 'нет') if group_data and edit_mode else "нет"
         )
 
         self.important_talks_switch = ft.Switch(
             label=" Разговоры о важном",
-            value=False,
+            value=bool(group_data.get('Разговоры о важном', 0)) if group_data and edit_mode else False,
             label_style=ft.TextStyle(color=PALETTE[2])
         )
 
+        # Если режим редактирования, сразу заполняем подгруппы
+        if edit_mode and group_data and subgroups:
+            self._initialize_subgroups(group_data['Название'], subgroups)
+
+    def _initialize_subgroups(self, group_name: str, subgroups: List[str]):
+        """Инициализирует чекбоксы подгрупп для режима редактирования"""
+        self.subgroup_label.visible = True
+        self.subgroup_checkboxes.visible = True
+
+        if "ХБО" in group_name.upper():
+            options = ["Кукольники", "Бутафоры"]
+        elif "ХКО" in group_name.upper():
+            options = ["Женская", "Мужская"]
+        else:
+            options = ["Нет", "1", "2", "3"]
+
+        checkbox_controls = []
+
+        for option in options:
+            checkbox = ft.Checkbox(
+                label=option,
+                value=option in subgroups,
+                label_style=ft.TextStyle(color=PALETTE[2]),
+                border_side=ft.BorderSide(width=2, color=PALETTE[2]),
+                on_change=lambda e, opt=option: self._on_subgroup_change(opt, e.control.value)
+            )
+            self.subgroup_checkbox_refs[option] = checkbox
+            checkbox_controls.append(checkbox)
+
+        self.subgroup_checkboxes.controls = checkbox_controls
+
     def build(self) -> ft.Column:
+        title = "Редактировать группу" if self.edit_mode else "Добавить группу"
+
         return ft.Column([
-            ft.Text("Добавить группу", size=18, weight="bold", color=PALETTE[2]),
+            ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
             self.group_name_field,
             self.subgroup_label,
             self.subgroup_checkboxes,
@@ -151,31 +191,31 @@ class GroupForm:
             self.toast.show("Введите название группы!", success=False)
             return
 
-        # 1. Проверка: вообще ничего не выбрано
         if not self.selected_subgroups:
             self.toast.show("Выберите хотя бы одну подгруппу (или 'Нет')!", success=False)
             return
 
-        # 2. Проверка: для ХКО и ХБО нельзя "Нет"
         if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and "Нет" in self.selected_subgroups:
             self.toast.show("Группы ХКО и ХБО должны иметь подгруппы!", success=False)
             return
 
-        # 3. Проверка на существующие записи (встроена в insert_group_with_subgroups)
         group_data = {
             'Название': group_name,
             'Самообразование': self.self_education_dropdown.value if self.self_education_dropdown.value != "нет" else None,
             'Разговоры о важном': 1 if self.important_talks_switch.value else 0
         }
 
-        success = self.db_operations.insert_group_with_subgroups(group_data, self.selected_subgroups)
+        # Проверка на дубликаты (только если изменилось название группы)
+        if self.edit_mode and group_name.upper() != self.original_group_name.upper():
+            existing_groups = self.db_operations.get_groups_with_subgroups()
+            group_exists = any(existing['Название'].upper() == group_name.upper()
+                               for existing in existing_groups)
 
-        if success:
-            self.toast.show("Группа и подгруппы успешно добавлены!", success=True)
-            self.on_submit()
-        else:
-            self.toast.show("Ошибка при добавлении группы! Возможно, такая группа или подгруппа уже существует.",
-                            success=False)
+            if group_exists:
+                self.toast.show(f"Группа '{group_name}' уже существует!", success=False)
+                return
+
+        self.on_submit(group_data, self.selected_subgroups)
 
     def set_page(self, page: ft.Page):
         self.page = page
