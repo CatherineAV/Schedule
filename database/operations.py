@@ -33,7 +33,7 @@ class DBOperations:
 
     def get_groups_with_subgroups(self) -> List[Dict[str, Any]]:
         query = """
-        SELECT g.ID, g.Название, g.Самообразование, g.[Разговоры о важном],
+        SELECT g.ID, g.Название as Группа, g.Самообразование, g.[Разговоры о важном],
                s.Название as Подгруппа
         FROM Группы g
         LEFT JOIN Подгруппы s ON g.ID = s.ГруппаID
@@ -45,8 +45,8 @@ class DBOperations:
 
         for row in rows:
             result.append({
-                "ID": row['ID'],  # Добавляем ID
-                "Название": row['Название'],
+                "ID": row['ID'],
+                "Группа": row['Группа'],
                 "Подгруппа": row['Подгруппа'] if row['Подгруппа'] else "Нет",
                 "Самообразование": row['Самообразование'] if row['Самообразование'] else "Нет",
                 "Разговоры о важном": "Да" if row['Разговоры о важном'] else "Нет"
@@ -63,13 +63,13 @@ class DBOperations:
             existing_groups = self.get_groups_with_subgroups()
             group_name = group_data['Название']
 
-            # Проверяем, есть ли уже такая группа (без учета регистра)
-            group_exists = any(existing['Название'].upper() == group_name.upper() for existing in existing_groups)
+            # Исправляем название колонки с 'Название' на 'Группа'
+            group_exists = any(existing['Группа'].upper() == group_name.upper() for existing in existing_groups)
 
             if group_exists:
-                # Получаем все подгруппы этой группы (без учета регистра названия группы)
+                # Получаем все подгруппы этой группы (используем новое название колонки)
                 existing_subgroups = [existing['Подгруппа'] for existing in existing_groups
-                                      if existing['Название'].upper() == group_name.upper()]
+                                      if existing['Группа'].upper() == group_name.upper()]
 
                 # Если у группы уже есть подгруппа "Нет" - нельзя добавлять другие подгруппы
                 if "Нет" in existing_subgroups:
@@ -176,3 +176,35 @@ class DBOperations:
             return False
         finally:
             conn.close()
+
+    def get_modules(self) -> List[Dict[str, Any]]:
+        """Получает все модули для выпадающего списка"""
+        return self.db.execute_query("SELECT Код, Название FROM Модули ORDER BY Код")
+
+    def insert_module(self, code: str, name: str) -> bool:
+        """Добавляет новый модуль"""
+        return self.db.execute_command(
+            "INSERT INTO Модули (Код, Название) VALUES (?, ?)",
+            (code, name)
+        )
+
+    def check_subject_exists(self, name: str, module: str) -> bool:
+        """Проверяет, существует ли предмет с таким названием и модулем"""
+        result = self.db.execute_query(
+            "SELECT COUNT(*) as count FROM Предметы WHERE Название = ? AND Модуль = ?",
+            (name, module)
+        )
+        return result[0]['count'] > 0 if result else False
+
+    def get_subjects_with_module_names(self) -> List[Dict[str, Any]]:
+        query = """
+        SELECT 
+            п.ID, 
+            п.Название as Предмет, 
+            п.Модуль as [Код модуля],
+            м.Название as [Название модуля]
+        FROM Предметы п
+        LEFT JOIN Модули м ON п.Модуль = м.Код
+        ORDER BY п.ID
+        """
+        return self.db.execute_query(query)

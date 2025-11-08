@@ -61,8 +61,8 @@ class Database:
         CREATE TABLE IF NOT EXISTS Предметы (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             Название TEXT NOT NULL,
-            МодульКод TEXT NOT NULL,
-            FOREIGN KEY (МодульКод) REFERENCES Модули(Код)
+            Модуль TEXT NOT NULL,
+            FOREIGN KEY (Модуль) REFERENCES Модули(Код)
         );
 
         CREATE TABLE IF NOT EXISTS Преподаватели (

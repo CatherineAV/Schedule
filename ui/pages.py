@@ -125,7 +125,10 @@ class DataPane(BasePage):
     def render(self, section_name: str):
         if section_name == "Группы":
             data = self.db_ops.get_groups_with_subgroups()
-            columns = ["ID", "Название", "Подгруппа", "Самообразование", "Разговоры о важном"]
+            columns = ["ID", "Группа", "Подгруппа", "Самообразование", "Разговоры о важном"]
+        elif section_name == "Предметы":
+            data = self.db_ops.get_subjects_with_module_names()
+            columns = ["ID", "Предмет", "Код модуля", "Название модуля"]
         else:
             data = self.db_ops.get_table_data(section_name)
             columns = self.db_ops.get_table_columns(section_name)
@@ -180,7 +183,8 @@ class DataPane(BasePage):
                 record = data[selected_row]
 
                 if section_name == "Группы":
-                    success = self.db_ops.delete_group_with_subgroups(record['Название'], record['Подгруппа'])
+                    # Меняем 'Название' на 'Группа'
+                    success = self.db_ops.delete_group_with_subgroups(record['Группа'], record['Подгруппа'])
                 else:
                     success = self.db_ops.delete_record(section_name, record['ID'])
 
@@ -218,6 +222,8 @@ class DataPane(BasePage):
 
             if section_name == "Группы":
                 self._render_edit_group_form(record)
+            elif section_name == "Предметы":
+                self._render_edit_subject_form(record)
             else:
                 self._render_edit_standard_form(section_name, record, columns)
 
@@ -275,11 +281,9 @@ class DataPane(BasePage):
 
         self.page.update()
 
-    # ВЫНОСИМ МЕТОДЫ РЕДАКТИРОВАНИЯ ИЗ RENDER НА УРОВЕНЬ КЛАССА:
-
     def _render_edit_group_form(self, record):
         # Получаем все подгруппы для этой группы
-        group_name = record['Название']
+        group_name = record['Группа']  # Меняем 'Название' на 'Группа'
         subgroups = [record['Подгруппа']] if record['Подгруппа'] != "Нет" else []
 
         def on_form_submit(group_data, subgroups):
@@ -287,7 +291,8 @@ class DataPane(BasePage):
             all_groups = self.db_ops.get_groups_with_subgroups()
             group_id = None
             for group in all_groups:
-                if group['Название'] == group_name and group['Подгруппа'] == record['Подгруппа']:
+                if group['Группа'] == group_name and group['Подгруппа'] == record[
+                    'Подгруппа']:  # Меняем 'Название' на 'Группа'
                     group_id = group['ID']
                     break
 
@@ -301,7 +306,7 @@ class DataPane(BasePage):
             self.render("Группы")
 
         group_data = {
-            'Название': record['Название'],
+            'Название': record['Группа'],  # Меняем 'Название' на 'Группа'
             'Самообразование': record['Самообразование'] if record['Самообразование'] != "Нет" else None,
             'Разговоры о важном': 1 if record['Разговоры о важном'] == "Да" else 0
         }
@@ -376,6 +381,8 @@ class DataPane(BasePage):
     def _render_add_form(self, table_name: str, columns: List[str]):
         if table_name == "Группы":
             self._render_group_add_form()
+        elif table_name == "Предметы":
+            self._render_add_subject_form()
         else:
             self._render_standard_add_form(table_name, columns)
 
@@ -450,6 +457,61 @@ class DataPane(BasePage):
         self.content.content = ft.Container(
             content=form_content,
             padding=20
+        )
+
+        self.page.update()
+
+    def _render_add_subject_form(self):
+        def on_form_submit(subject_data):
+            success = self.db_ops.insert_data("Предметы", subject_data)
+            if success:
+                self.toast.show("Предмет успешно добавлен!", success=True)
+                self.render("Предметы")
+            else:
+                self.toast.show("Ошибка при добавлении предмета!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Предметы")
+
+        from ui.forms import SubjectForm
+        subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        subject_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=subject_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_subject_form(self, record):
+        def on_form_submit(subject_data):
+            success = self.db_ops.update_record("Предметы", record['ID'], subject_data)
+            if success:
+                self.toast.show("Предмет успешно обновлен!", success=True)
+                self.render("Предметы")
+            else:
+                self.toast.show("Ошибка при обновлении предмета!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Предметы")
+
+        # Используем новые названия колонок
+        subject_data = {
+            'Название': record['Предмет'],  # Берем из колонки "Предмет"
+            'Модуль': record['Код модуля']  # Берем из колонки "Код модуля"
+        }
+
+        from ui.forms import SubjectForm
+        subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                   edit_mode=True, subject_data=subject_data)
+        subject_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=subject_form.build(),
+            padding=20,
+            expand=True
         )
 
         self.page.update()

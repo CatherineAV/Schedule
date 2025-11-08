@@ -219,3 +219,177 @@ class GroupForm:
 
     def set_page(self, page: ft.Page):
         self.page = page
+
+
+class SubjectForm:
+    def __init__(self, on_submit: Callable, on_cancel: Callable, db_operations, toast,
+                 edit_mode: bool = False, subject_data: Optional[Dict] = None):
+        self.on_submit = on_submit
+        self.on_cancel = on_cancel
+        self.db_operations = db_operations
+        self.toast = toast
+        self.edit_mode = edit_mode
+        self.original_subject_name = subject_data['Название'] if subject_data and edit_mode else ""
+        self.original_module = subject_data['Модуль'] if subject_data and edit_mode else ""
+
+        # Загружаем модули для выпадающего списка
+        self.modules = self.db_operations.get_modules()
+
+        self.subject_name_field = ft.TextField(
+            label="Название предмета",
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            value=subject_data['Название'] if subject_data and edit_mode else "",
+        )
+
+        # Создаем выпадающий список для модулей
+        module_options = [ft.dropdown.Option(module['Код'], f"{module['Код']} - {module['Название']}")
+                          for module in self.modules]
+
+        self.module_dropdown = ft.Dropdown(
+            label="Модуль",
+            width=None,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=module_options,
+            value=subject_data['Модуль'] if subject_data and edit_mode else None,  # Меняем на Модуль
+        )
+
+        # Поля для добавления нового модуля (только при добавлении)
+        self.new_module_code_field = ft.TextField(
+            label="Код нового модуля",
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            visible=False,
+        )
+
+        self.new_module_name_field = ft.TextField(
+            label="Название нового модуля",
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            visible=False,
+        )
+
+        self.add_new_module_switch = ft.Switch(
+            label=" Добавить новый модуль",
+            value=False,
+            label_style=ft.TextStyle(color=PALETTE[2]),
+            visible=not edit_mode,
+            on_change=self._on_module_switch_change
+        )
+
+    def _on_module_switch_change(self, e):
+        """Показывает/скрывает поля для нового модуля"""
+        is_visible = self.add_new_module_switch.value
+
+        if is_visible:
+            self.new_module_code_field.visible = True
+            self.new_module_name_field.visible = True
+            self.module_dropdown.visible = False
+        else:
+            self.new_module_code_field.visible = False
+            self.new_module_name_field.visible = False
+            self.module_dropdown.visible = True
+            self.new_module_code_field.value = ""
+            self.new_module_name_field.value = ""
+
+        if hasattr(self, 'page'):
+            self.page.update()
+
+    def build(self) -> ft.Column:
+        title = "Редактировать предмет" if self.edit_mode else "Добавить предмет"
+
+        form_content = [
+            ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
+            self.subject_name_field,
+        ]
+
+        if not self.edit_mode:
+            form_content.extend([
+                self.add_new_module_switch,
+                self.new_module_code_field,
+                self.new_module_name_field,
+                self.module_dropdown,
+            ])
+        else:
+            form_content.append(self.module_dropdown)
+
+        form_content.extend([
+            ft.Container(expand=True),
+            ft.Container(
+                content=ft.Row([
+                    ft.ElevatedButton(
+                        "Сохранить",
+                        style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
+                        on_click=self._on_form_submit
+                    ),
+                    ft.ElevatedButton(
+                        "Отмена",
+                        style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                        on_click=self.on_cancel
+                    )
+                ], alignment=ft.MainAxisAlignment.END, spacing=20),
+                padding=ft.padding.only(top=20),
+                border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
+            )
+        ])
+
+        return ft.Column(form_content, spacing=15, expand=True)
+
+    def _on_form_submit(self, e):
+        subject_name = self.subject_name_field.value.strip()
+
+        if self.add_new_module_switch.value:
+            # Режим создания нового модуля
+            module_code = self.new_module_code_field.value.strip()
+            module_name = self.new_module_name_field.value.strip()
+
+            if not subject_name:
+                self.toast.show("Введите название предмета!", success=False)
+                return
+
+            if not module_code or not module_name:
+                self.toast.show("Заполните код и название нового модуля!", success=False)
+                return
+
+            # Добавляем новый модуль
+            if not self.db_operations.insert_module(module_code, module_name):
+                self.toast.show("Ошибка при добавлении модуля! Возможно, модуль с таким кодом уже существует.",
+                                success=False)
+                return
+
+            module = module_code  # Используем код модуля как значение
+        else:
+            # Режим выбора существующего модуля
+            module = self.module_dropdown.value  # Меняем на module
+
+            if not subject_name:
+                self.toast.show("Введите название предмета!", success=False)
+                return
+
+            if not module:
+                self.toast.show("Выберите модуль!", success=False)
+                return
+
+        # Проверка на дубликаты
+        if self.edit_mode:
+            if (subject_name.upper() != self.original_subject_name.upper() or
+                    module != self.original_module):  # Меняем на module
+                if self.db_operations.check_subject_exists(subject_name, module):
+                    self.toast.show(f"Предмет '{subject_name}' с модулем '{module}' уже существует!", success=False)
+                    return
+        else:
+            if self.db_operations.check_subject_exists(subject_name, module):
+                self.toast.show(f"Предмет '{subject_name}' с модулем '{module}' уже существует!", success=False)
+                return
+
+        subject_data = {
+            'Название': subject_name,
+            'Модуль': module  # Меняем на Модуль
+        }
+
+        self.on_submit(subject_data)
+
+    def set_page(self, page: ft.Page):
+        self.page = page
