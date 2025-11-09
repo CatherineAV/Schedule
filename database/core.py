@@ -55,7 +55,7 @@ class Database:
             Номер TEXT NOT NULL,
             ТерриторияID INTEGER NOT NULL,
             Вместимость INTEGER,
-            FOREIGN KEY (ТерриторияID) REFERENCES Территории(ID)
+            FOREIGN KEY (ТерриторияID) REFERENCES Территории(ID) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS Предметы (
@@ -93,8 +93,8 @@ class Database:
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ПредметID INTEGER NOT NULL,
             КабинетID INTEGER NOT NULL,
-            FOREIGN KEY (ПредметID) REFERENCES Предметы(ID),
-            FOREIGN KEY (КабинетID) REFERENCES Кабинеты(ID)
+            FOREIGN KEY (ПредметID) REFERENCES Предметы(ID) ON DELETE CASCADE,
+            FOREIGN KEY (КабинетID) REFERENCES Кабинеты(ID) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS Нагрузка (

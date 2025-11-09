@@ -1,5 +1,5 @@
 import sqlite3
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from .core import Database
 
 
@@ -208,3 +208,156 @@ class DBOperations:
         ORDER BY п.ID
         """
         return self.db.execute_query(query)
+
+    def get_classrooms(self) -> List[Dict[str, Any]]:
+        """Получает все кабинеты с названиями территорий"""
+        query = """
+        SELECT к.ID, к.Номер, т.Название as Территория 
+        FROM Кабинеты к
+        LEFT JOIN Территории т ON к.ТерриторияID = т.ID
+        ORDER BY т.Название, к.Номер
+        """
+        return self.db.execute_query(query)
+
+    def insert_subject_with_classrooms(self, subject_data: Dict[str, Any], classroom_ids: List[int]) -> bool:
+        """Добавляет предмет и связанные кабинеты"""
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Добавляем предмет
+            cursor.execute(
+                "INSERT INTO Предметы (Название, Модуль) VALUES (?, ?)",
+                (subject_data['Название'], subject_data['Модуль'])
+            )
+
+            subject_id = cursor.lastrowid
+
+            # Добавляем связи с кабинетами
+            for classroom_id in classroom_ids:
+                cursor.execute(
+                    "INSERT INTO Предмет_Кабинет (ПредметID, КабинетID) VALUES (?, ?)",
+                    (subject_id, classroom_id)
+                )
+
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Ошибка при добавлении предмета: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def get_territories(self) -> List[Dict[str, Any]]:
+        """Получает все территории"""
+        return self.db.execute_query("SELECT ID, Название FROM Территории ORDER BY Название")
+
+    def get_classrooms_by_territory(self, territory_id: int) -> List[Dict[str, Any]]:
+        """Получает кабинеты по территории"""
+        return self.db.execute_query(
+            "SELECT ID, Номер FROM Кабинеты WHERE ТерриторияID = ? ORDER BY Номер",
+            (territory_id,)
+        )
+
+    def get_classrooms_by_subject(self, subject_id: int) -> List[Dict[str, Any]]:
+        """Получает кабинеты по предмету"""
+        return self.db.execute_query(
+            """SELECT к.ID, к.Номер, т.Название as Территория 
+            FROM Кабинеты к
+            JOIN Предмет_Кабинет пк ON к.ID = пк.КабинетID
+            JOIN Территории т ON к.ТерриторияID = т.ID
+            WHERE пк.ПредметID = ?""",
+            (subject_id,)
+        )
+
+    def update_subject_with_classrooms(self, subject_id: int, subject_data: Dict[str, Any],
+                                       classroom_ids: List[int]) -> bool:
+        """Обновляет предмет и связанные кабинеты"""
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Обновляем предмет
+            cursor.execute(
+                "UPDATE Предметы SET Название = ?, Модуль = ? WHERE ID = ?",
+                (subject_data['Название'], subject_data['Модуль'], subject_id)
+            )
+
+            # Удаляем старые связи с кабинетами
+            cursor.execute("DELETE FROM Предмет_Кабинет WHERE ПредметID = ?", (subject_id,))
+
+            # Добавляем новые связи с кабинетами
+            for classroom_id in classroom_ids:
+                cursor.execute(
+                    "INSERT INTO Предмет_Кабинет (ПредметID, КабинетID) VALUES (?, ?)",
+                    (subject_id, classroom_id)
+                )
+
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Ошибка при обновлении предмета: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def get_classroom_by_id(self, classroom_id: int) -> Optional[Dict[str, Any]]:
+        """Получает кабинет по ID"""
+        result = self.db.execute_query(
+            "SELECT ID, Номер, ТерриторияID FROM Кабинеты WHERE ID = ?",
+            (classroom_id,)
+        )
+        return result[0] if result else None
+
+    def check_classroom_exists(self, number: str, territory_id: int) -> bool:
+        """Проверяет, существует ли кабинет с таким номером на территории"""
+        result = self.db.execute_query(
+            "SELECT COUNT(*) as count FROM Кабинеты WHERE Номер = ? AND ТерриторияID = ?",
+            (number, territory_id)
+        )
+        return result[0]['count'] > 0 if result else False
+
+    def get_classrooms_with_territory_names(self) -> List[Dict[str, Any]]:
+        """Получает кабинеты с названиями территорий"""
+        query = """
+        SELECT 
+            к.ID, 
+            к.Номер as [Номер кабинета],
+            т.Название as Территория,
+            к.Вместимость
+        FROM Кабинеты к
+        LEFT JOIN Территории т ON к.ТерриторияID = т.ID
+        ORDER BY т.Название, к.Номер
+        """
+        return self.db.execute_query(query)
+
+    def delete_territory_with_classrooms(self, territory_id: int) -> bool:
+        """Удаляет территорию и все связанные с ней кабинеты"""
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Сначала удаляем связи предметов с кабинетами этой территории
+            cursor.execute("""
+                DELETE FROM Предмет_Кабинет 
+                WHERE КабинетID IN (
+                    SELECT ID FROM Кабинеты WHERE ТерриторияID = ?
+                )
+            """, (territory_id,))
+
+            # Затем удаляем кабинеты этой территории
+            cursor.execute("DELETE FROM Кабинеты WHERE ТерриторияID = ?", (territory_id,))
+
+            # Затем удаляем саму территорию
+            cursor.execute("DELETE FROM Территории WHERE ID = ?", (territory_id,))
+
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Ошибка при удалении территории: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()

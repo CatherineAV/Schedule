@@ -2,7 +2,7 @@ import flet as ft
 from typing import Callable, List, Dict, Any, Optional
 from database.operations import DBOperations
 from ui.components import Toast, DataTableManager, PALETTE
-from ui.forms import GroupForm
+from ui.forms import GroupForm, ClassroomForm
 
 
 class BasePage:
@@ -129,6 +129,15 @@ class DataPane(BasePage):
         elif section_name == "Предметы":
             data = self.db_ops.get_subjects_with_module_names()
             columns = ["ID", "Предмет", "Код модуля", "Название модуля"]
+        elif section_name == "Преподаватели":
+            data = self.db_ops.get_table_data("Преподаватели")
+            columns = ["ID", "ФИО", "Нагрузка", "Дни", "Уроки"]
+        elif section_name == "Территории":
+            data = self.db_ops.get_table_data("Территории")
+            columns = ["ID", "Название", "Цвет"]
+        elif section_name == "Кабинеты":
+            data = self.db_ops.get_classrooms_with_territory_names()
+            columns = ["ID", "Номер кабинета", "Территория", "Вместимость"]  # "Номер" вместо "Номер кабинета"
         else:
             data = self.db_ops.get_table_data(section_name)
             columns = self.db_ops.get_table_columns(section_name)
@@ -183,8 +192,10 @@ class DataPane(BasePage):
                 record = data[selected_row]
 
                 if section_name == "Группы":
-                    # Меняем 'Название' на 'Группа'
                     success = self.db_ops.delete_group_with_subgroups(record['Группа'], record['Подгруппа'])
+                elif section_name == "Территории":
+                    # Используем новый метод для удаления территории с кабинетами
+                    success = self.db_ops.delete_territory_with_classrooms(record['ID'])
                 else:
                     success = self.db_ops.delete_record(section_name, record['ID'])
 
@@ -283,7 +294,7 @@ class DataPane(BasePage):
 
     def _render_edit_group_form(self, record):
         # Получаем все подгруппы для этой группы
-        group_name = record['Группа']  # Меняем 'Название' на 'Группа'
+        group_name = record['Группа']
         subgroups = [record['Подгруппа']] if record['Подгруппа'] != "Нет" else []
 
         def on_form_submit(group_data, subgroups):
@@ -291,8 +302,7 @@ class DataPane(BasePage):
             all_groups = self.db_ops.get_groups_with_subgroups()
             group_id = None
             for group in all_groups:
-                if group['Группа'] == group_name and group['Подгруппа'] == record[
-                    'Подгруппа']:  # Меняем 'Название' на 'Группа'
+                if group['Группа'] == group_name and group['Подгруппа'] == record['Подгруппа']:
                     group_id = group['ID']
                     break
 
@@ -306,7 +316,7 @@ class DataPane(BasePage):
             self.render("Группы")
 
         group_data = {
-            'Название': record['Группа'],  # Меняем 'Название' на 'Группа'
+            'Название': record['Группа'],
             'Самообразование': record['Самообразование'] if record['Самообразование'] != "Нет" else None,
             'Разговоры о важном': 1 if record['Разговоры о важном'] == "Да" else 0
         }
@@ -342,49 +352,149 @@ class DataPane(BasePage):
 
         form_content = ft.Column([
             ft.Text(f"Редактировать запись в {table_name}", size=18, weight="bold", color=PALETTE[2])
-        ])
+        ], spacing=15)
 
         for column in columns:
             if column.lower() != 'id':
-                field = ft.TextField(
-                    label=column,
-                    border_color=PALETTE[3],
-                    color=PALETTE[2],
-                    value=str(record.get(column, ""))
-                )
+                # Для кабинетов нужно преобразовать TerritoryID в выпадающий список
+                if table_name == "Кабинеты" and column == "ТерриторияID":
+                    # Создаем выпадающий список для территорий
+                    territories = self.db_ops.get_territories()
+                    territory_options = [ft.dropdown.Option(str(t['ID']), t['Название']) for t in territories]
+
+                    field = ft.Dropdown(
+                        label=column,
+                        width=300,
+                        border_color=PALETTE[3],
+                        bgcolor=ft.Colors.BLUE_GREY,
+                        color=PALETTE[2],
+                        options=territory_options,
+                        value=str(record.get(column, ""))
+                    )
+                else:
+                    field = ft.TextField(
+                        label=column,
+                        border_color=PALETTE[3],
+                        color=PALETTE[2],
+                        value=str(record.get(column, ""))
+                    )
                 form_fields_ref[column] = field
                 form_content.controls.append(field)
 
+        # Добавляем кнопки в едином стиле
         form_content.controls.extend([
-            ft.Row([
-                ft.ElevatedButton(
-                    "Сохранить",
-                    style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
-                    on_click=on_form_submit
-                ),
-                ft.ElevatedButton(
-                    "Отмена",
-                    style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
-                    on_click=lambda e: self.render(table_name)
-                )
-            ])
+            ft.Container(expand=True),
+            ft.Container(
+                content=ft.Row([
+                    ft.ElevatedButton(
+                        "Сохранить",
+                        style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
+                        on_click=on_form_submit
+                    ),
+                    ft.ElevatedButton(
+                        "Отмена",
+                        style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                        on_click=lambda e: self.render(table_name)
+                    )
+                ], alignment=ft.MainAxisAlignment.END, spacing=20),
+                padding=ft.padding.only(top=20),
+                border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
+            )
         ])
 
+        # Оборачиваем в ListView для прокрутки
+        scrollable_content = ft.Column([
+            ft.ListView(
+                [form_content],
+                expand=True,
+                spacing=0,
+                padding=0
+            )
+        ], expand=True)
+
         self.content.content = ft.Container(
-            content=form_content,
-            padding=20
+            content=scrollable_content,
+            padding=20,
+            expand=True
         )
 
         self.page.update()
 
-    # Остальные методы остаются без изменений:
     def _render_add_form(self, table_name: str, columns: List[str]):
         if table_name == "Группы":
             self._render_group_add_form()
         elif table_name == "Предметы":
             self._render_add_subject_form()
+        elif table_name == "Кабинеты":
+            self._render_add_classroom_form()
         else:
             self._render_standard_add_form(table_name, columns)
+
+    def _render_add_classroom_form(self):
+        def on_form_submit(classroom_data):
+            success = self.db_ops.insert_data("Кабинеты", classroom_data)
+            if success:
+                self.toast.show("Кабинет успешно добавлен!", success=True)
+                self.render("Кабинеты")
+            else:
+                self.toast.show("Ошибка при добавлении кабинета!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Кабинеты")
+
+        classroom_form = ClassroomForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        classroom_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=classroom_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_classroom_form(self, record):
+        def on_form_submit(classroom_data):
+            success = self.db_ops.update_record("Кабинеты", record['ID'], classroom_data)
+            if success:
+                self.toast.show("Кабинет успешно обновлен!", success=True)
+                self.render("Кабинеты")
+            else:
+                self.toast.show("Ошибка при обновлении кабинета!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Кабинеты")
+
+        # Используем правильные ключи из БД
+        classroom_data = {
+            'Номер': record['Номер кабинета'],  # Берем значение из колонки "Номер кабинета"
+            'ТерриторияID': None,
+            'Вместимость': record.get('Вместимость')
+        }
+
+        # Находим ID территории по названию
+        territories = self.db_ops.get_territories()
+        territory_id = None
+        for territory in territories:
+            if territory['Название'] == record['Территория']:
+                territory_id = territory['ID']
+                break
+
+        classroom_data['ТерриторияID'] = territory_id
+
+        classroom_form = ClassroomForm(
+            on_form_submit, on_form_cancel, self.db_ops, self.toast,
+            edit_mode=True, classroom_data=classroom_data
+        )
+        classroom_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=classroom_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
 
     def _render_group_add_form(self):
         def on_form_submit(group_data, subgroups):  # Добавляем аргументы
@@ -425,9 +535,21 @@ class DataPane(BasePage):
             else:
                 self.toast.show(f"Ошибка при добавлении данных в {table_name}", success=False)
 
-        form_content = ft.Column([
-            ft.Text(f"Добавить запись в {table_name}", size=18, weight="bold", color=PALETTE[2])
-        ])
+        # Определяем заголовок в зависимости от таблицы
+        title_map = {
+            "Территории": "Добавить территорию",
+            "Кабинеты": "Добавить кабинет",
+            "Преподаватели": "Добавить преподавателя",
+            "Предметы": "Добавить предмет",
+            "Группы": "Добавить группу",
+            "Модули": "Добавить модуль"
+        }
+        title = title_map.get(table_name, f"Добавить {table_name.lower()}")
+
+        # Прокручиваемая область
+        scrollable_content = ft.Column([
+            ft.Text(title, size=18, weight="bold", color=PALETTE[2])  # Используем правильный заголовок
+        ], spacing=15)
 
         for column in columns:
             if column.lower() != 'id':
@@ -437,10 +559,11 @@ class DataPane(BasePage):
                     color=PALETTE[2]
                 )
                 form_fields_ref[column] = field
-                form_content.controls.append(field)
+                scrollable_content.controls.append(field)
 
-        form_content.controls.extend([
-            ft.Row([
+        # Кнопки ВНЕ прокручиваемой области
+        buttons_container = ft.Container(
+            content=ft.Row([
                 ft.ElevatedButton(
                     "Сохранить",
                     style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
@@ -451,19 +574,36 @@ class DataPane(BasePage):
                     style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
                     on_click=lambda e: self.render(table_name)
                 )
-            ])
-        ])
+            ], alignment=ft.MainAxisAlignment.END, spacing=20),
+            padding=ft.padding.only(top=20),
+            border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
+        )
+
+        # Основной контейнер
+        main_content = ft.Column([
+            ft.Container(
+                content=ft.ListView(
+                    [scrollable_content],
+                    expand=True,
+                    spacing=0,
+                    padding=0
+                ),
+                expand=True
+            ),
+            buttons_container
+        ], expand=True)
 
         self.content.content = ft.Container(
-            content=form_content,
-            padding=20
+            content=main_content,
+            padding=20,
+            expand=True
         )
 
         self.page.update()
 
     def _render_add_subject_form(self):
-        def on_form_submit(subject_data):
-            success = self.db_ops.insert_data("Предметы", subject_data)
+        def on_form_submit(subject_data, classroom_ids):
+            success = self.db_ops.insert_subject_with_classrooms(subject_data, classroom_ids)
             if success:
                 self.toast.show("Предмет успешно добавлен!", success=True)
                 self.render("Предметы")
@@ -486,8 +626,8 @@ class DataPane(BasePage):
         self.page.update()
 
     def _render_edit_subject_form(self, record):
-        def on_form_submit(subject_data):
-            success = self.db_ops.update_record("Предметы", record['ID'], subject_data)
+        def on_form_submit(subject_data, classroom_ids):
+            success = self.db_ops.update_subject_with_classrooms(record['ID'], subject_data, classroom_ids)
             if success:
                 self.toast.show("Предмет успешно обновлен!", success=True)
                 self.render("Предметы")
@@ -497,15 +637,20 @@ class DataPane(BasePage):
         def on_form_cancel(e):
             self.render("Предметы")
 
-        # Используем новые названия колонок
+        # Получаем текущие кабинеты предмета для предзаполнения
+        current_classrooms = self.db_ops.get_classrooms_by_subject(record['ID'])
+        classroom_ids = [classroom['ID'] for classroom in current_classrooms]
+
         subject_data = {
-            'Название': record['Предмет'],  # Берем из колонки "Предмет"
-            'Модуль': record['Код модуля']  # Берем из колонки "Код модуля"
+            'Название': record['Предмет'],
+            'Модуль': record['Код модуля']
         }
 
         from ui.forms import SubjectForm
-        subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
-                                   edit_mode=True, subject_data=subject_data)
+        subject_form = SubjectForm(
+            on_form_submit, on_form_cancel, self.db_ops, self.toast,
+            edit_mode=True, subject_data=subject_data, classroom_ids=classroom_ids
+        )
         subject_form.set_page(self.page)
 
         self.content.content = ft.Container(

@@ -47,6 +47,14 @@ class DataTableManager:
 
         selected_row = self.selected_rows.get(section_name, None)
 
+        # Словарь для красивых названий колонок
+        pretty_column_names = {
+            "Название": "Территория",  # Для таблицы Территории
+            "Номер": "Номер кабинета",  # Для таблицы Кабинеты
+            "ФИО": "Преподаватель",  # Для таблицы Преподаватели
+            "НазваниеМодуля": "Название модуля"  # Для таблицы Предметы
+        }
+
         for i, row in enumerate(data):
             cells = []
             for col in display_columns:
@@ -69,8 +77,11 @@ class DataTableManager:
             )
             data_rows.append(data_row)
 
+        # Используем красивые названия для заголовков колонок
+        display_column_headers = [pretty_column_names.get(col, col) for col in display_columns]
+
         return ft.DataTable(
-            columns=[ft.DataColumn(ft.Text(c, weight="bold", color=PALETTE[2])) for c in display_columns],
+            columns=[ft.DataColumn(ft.Text(c, weight="bold", color=PALETTE[2])) for c in display_column_headers],
             rows=data_rows,
             expand=True,
             divider_thickness=0,
