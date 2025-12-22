@@ -1,6 +1,6 @@
 import flet as ft
 from typing import Callable, List, Dict, Optional, Any
-from .components import PALETTE
+from ui.components import PALETTE, Validator
 
 
 class GroupForm:
@@ -30,6 +30,11 @@ class GroupForm:
             visible=bool(group_data and edit_mode)
         )
 
+        if edit_mode and group_data:
+            self_education_value = group_data.get('Самообразование', 'нет')
+        else:
+            self_education_value = "нет"
+
         self.self_education_dropdown = ft.Dropdown(
             label="День самообразования",
             width=210,
@@ -45,7 +50,7 @@ class GroupForm:
                 ft.dropdown.Option("пт"),
                 ft.dropdown.Option("сб")
             ],
-            value=group_data.get('Самообразование', 'нет') if group_data and edit_mode else "нет"
+            value=self_education_value
         )
 
         self.important_talks_switch = ft.Switch(
@@ -54,12 +59,10 @@ class GroupForm:
             label_style=ft.TextStyle(color=PALETTE[2])
         )
 
-        # Если режим редактирования, сразу заполняем подгруппы
         if edit_mode and group_data and subgroups:
             self._initialize_subgroups(group_data['Название'], subgroups)
 
     def _initialize_subgroups(self, group_name: str, subgroups: List[str]):
-        """Инициализирует чекбоксы подгрупп для режима редактирования"""
         self.subgroup_label.visible = True
         self.subgroup_checkboxes.visible = True
 
@@ -88,7 +91,6 @@ class GroupForm:
     def build(self) -> ft.Column:
         title = "Редактировать группу" if self.edit_mode else "Добавить группу"
 
-        # Прокручиваемая область
         scrollable_content = ft.Column([
             ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
             self.group_name_field,
@@ -98,7 +100,6 @@ class GroupForm:
             self.important_talks_switch,
         ], spacing=15)
 
-        # Кнопки ВНЕ прокручиваемой области
         buttons_container = ft.Container(
             content=ft.Row([
                 ft.ElevatedButton(
@@ -200,33 +201,31 @@ class GroupForm:
     def _on_form_submit(self, e):
         group_name = self.group_name_field.value.strip()
 
-        if not group_name:
-            self.toast.show("Введите название группы!", success=False)
+        # Валидация обязательных полей
+        if error := Validator.validate_required(group_name, "Название группы"):
+            self.toast.show(error, success=False)
             return
 
-        if not self.selected_subgroups:
-            self.toast.show("Выберите хотя бы одну подгруппу (или 'Нет')!", success=False)
+        # Валидация подгрупп
+        if error := Validator.validate_subgroups(group_name, self.selected_subgroups):
+            self.toast.show(error, success=False)
             return
 
-        if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and "Нет" in self.selected_subgroups:
-            self.toast.show("Группы ХКО и ХБО должны иметь подгруппы!", success=False)
-            return
+        # Валидация уникальности (только если имя изменилось при редактировании)
+        if self.edit_mode and group_name.upper() != self.original_group_name.upper():
+            if error := Validator.validate_unique(self.db_operations, "Группы", "Название", group_name):
+                self.toast.show(error, success=False)
+                return
+        elif not self.edit_mode:
+            if error := Validator.validate_unique(self.db_operations, "Группы", "Название", group_name):
+                self.toast.show(error, success=False)
+                return
 
         group_data = {
             'Название': group_name,
             'Самообразование': self.self_education_dropdown.value if self.self_education_dropdown.value != "нет" else None,
             'Разговоры о важном': 1 if self.important_talks_switch.value else 0
         }
-
-        # Проверка на дубликаты (только если изменилось название группы)
-        if self.edit_mode and group_name.upper() != self.original_group_name.upper():
-            existing_groups = self.db_operations.get_groups_with_subgroups()
-            group_exists = any(existing['Название'].upper() == group_name.upper()
-                               for existing in existing_groups)
-
-            if group_exists:
-                self.toast.show(f"Группа '{group_name}' уже существует!", success=False)
-                return
 
         self.on_submit(group_data, self.selected_subgroups)
 
@@ -247,13 +246,10 @@ class SubjectForm:
         self.original_module = subject_data['Модуль'] if subject_data and edit_mode else ""
         self.pre_selected_classroom_ids = classroom_ids if classroom_ids else []
 
-        # ЗАГРУЖАЕМ МОДУЛИ
         self.modules = self.db_operations.get_modules()
 
-        # Загружаем территории
         self.territories = self.db_operations.get_territories()
 
-        # Основные поля предмета
         self.subject_name_field = ft.TextField(
             label="Название предмета",
             border_color=PALETTE[3],
@@ -261,7 +257,6 @@ class SubjectForm:
             value=subject_data['Название'] if subject_data and edit_mode else "",
         )
 
-        # Создаем выпадающий список для модулей
         module_options = [ft.dropdown.Option(module['Код'], f"{module['Код']} - {module['Название']}")
                           for module in self.modules]
 
@@ -275,7 +270,6 @@ class SubjectForm:
             value=subject_data['Модуль'] if subject_data and edit_mode else None,
         )
 
-        # Поля для добавления нового модуля (только при добавлении)
         self.new_module_code_field = ft.TextField(
             label="Код нового модуля",
             border_color=PALETTE[3],
@@ -298,7 +292,6 @@ class SubjectForm:
             on_change=self._on_module_switch_change
         )
 
-        # Поля для территорий и кабинетов - СОЗДАЕМ СНАЧАЛА
         self.territory_dropdown = ft.Dropdown(
             label="Территория",
             width=300,
@@ -309,29 +302,26 @@ class SubjectForm:
             on_change=self._on_territory_change
         )
 
-        # Заменяем Column на ListView для кабинетов
         self.classroom_label = ft.Text("Доступные кабинеты", size=16, weight="bold",
                                        color=PALETTE[2], visible=False)
         self.classroom_listview = ft.ListView(
             expand=False,
-            height=150,  # Фиксированная высота с прокруткой
+            height=150,
             spacing=5,
             padding=10,
             visible=False
         )
 
-        # Контейнер для всего блока кабинетов
         self.classroom_container = ft.Container(
             content=self.classroom_listview,
             border=ft.border.all(1, PALETTE[1]),
             border_radius=5,
-            visible=False  # Изначально скрыт
+            visible=False
         )
 
         self.classroom_checkbox_refs = {}
         self.selected_classrooms = self.pre_selected_classroom_ids.copy()
 
-        # Сообщения
         self.no_territories_message = ft.Text(
             "Сначала создайте территории и кабинеты в соответствующих разделах",
             size=14,
@@ -345,88 +335,72 @@ class SubjectForm:
             visible=False
         )
 
-        # Загружаем кабинеты для предзаполнения (если есть ID кабинетов)
         self.classrooms_data = {}
         if self.pre_selected_classroom_ids:
             self._load_pre_selected_classrooms()
-            # Автоматически выбираем территорию если есть предвыбранные кабинеты
             if self.classrooms_data:
                 self._auto_select_territory()
 
     def _load_pre_selected_classrooms(self):
-        """Загружает данные о предвыбранных кабинетах"""
         for classroom_id in self.pre_selected_classroom_ids:
             classroom = self.db_operations.get_classroom_by_id(classroom_id)
             if classroom:
                 self.classrooms_data[classroom_id] = classroom
 
     def _auto_select_territory(self):
-        """Автоматически выбирает территорию на основе предвыбранных кабинетов"""
         if self.classrooms_data:
-            # Берем территорию первого кабинета
             first_classroom = next(iter(self.classrooms_data.values()))
             territory_id = str(first_classroom['ТерриторияID'])
             self.territory_dropdown.value = territory_id
-            # Загружаем кабинеты этой территории
             self._load_classrooms_for_territory(int(territory_id))
 
     def _load_classrooms_for_territory(self, territory_id: int):
-        """Загружает кабинеты для территории и отмечает предвыбранные"""
         classrooms = self.db_operations.get_classrooms_by_territory(territory_id)
 
         if classrooms:
-            # Есть кабинеты - показываем ВЕСЬ блок кабинетов
             self.classroom_label.visible = True
             self.classroom_listview.visible = True
-            self.classroom_container.visible = True  # Показываем контейнер
+            self.classroom_container.visible = True
             self.no_territories_message.visible = False
             self.no_classrooms_message.visible = False
 
-            # Очищаем список
             self.classroom_listview.controls.clear()
             self.classroom_checkbox_refs.clear()
 
-            # Группируем кабинеты по 3 в строку для компактного отображения
-            row_controls = []
-            current_row = ft.Row(spacing=3, wrap=True)
+            items_per_row = 15
 
-            for classroom in classrooms:
-                is_checked = classroom['ID'] in self.pre_selected_classroom_ids
-                checkbox = ft.Checkbox(
-                    label=classroom['Номер'],
-                    value=is_checked,
-                    label_style=ft.TextStyle(color=PALETTE[2]),
-                    on_change=lambda e, classroom_id=classroom['ID']: self._on_classroom_change(classroom_id,
-                                                                                                e.control.value)
+            for i in range(0, len(classrooms), items_per_row):
+                row_classrooms = classrooms[i:i + items_per_row]
+
+                row_controls = []
+                for classroom in row_classrooms:
+                    is_checked = classroom['ID'] in self.pre_selected_classroom_ids
+                    checkbox = ft.Checkbox(
+                        label=classroom['Номер'],
+                        value=is_checked,
+                        label_style=ft.TextStyle(color=PALETTE[2]),
+                        on_change=lambda e, classroom_id=classroom['ID']: self._on_classroom_change(classroom_id,
+                                                                                                    e.control.value)
+                    )
+                    self.classroom_checkbox_refs[classroom['ID']] = checkbox
+                    row_controls.append(checkbox)
+
+                row = ft.Row(
+                    controls=row_controls,
+                    spacing=10,
+                    wrap=False
                 )
-                self.classroom_checkbox_refs[classroom['ID']] = checkbox
-
-                # Добавляем чекбокс в текущую строку
-                current_row.controls.append(checkbox)
-
-                # Если в строке 8 чекбоксов, начинаем новую строку
-                if len(current_row.controls) >= 8:
-                    row_controls.append(current_row)
-                    current_row = ft.Row(spacing=10, wrap=True)
-
-            # Добавляем последнюю строку если она не пустая
-            if current_row.controls:
-                row_controls.append(current_row)
-
-            # Добавляем все строки в ListView
-            self.classroom_listview.controls.extend(row_controls)
+                self.classroom_listview.controls.append(row)
 
         else:
-            # Нет кабинетов - скрываем ВЕСЬ блок кабинетов
             self.classroom_label.visible = False
             self.classroom_listview.visible = False
-            self.classroom_container.visible = False  # Скрываем контейнер
+            self.classroom_container.visible = False
             self.no_territories_message.visible = False
             self.no_classrooms_message.visible = True
             self.no_classrooms_message.value = f"На выбранной территории нет кабинетов"
 
     def _on_territory_change(self, e):
-        """При изменении территории загружаем кабинеты"""
         territory_id = self.territory_dropdown.value
 
         if territory_id:
@@ -438,7 +412,6 @@ class SubjectForm:
             self.no_territories_message.visible = False
             self.no_classrooms_message.visible = False
 
-        # Сбрасываем выбранные кабинеты при смене территории
         self.selected_classrooms.clear()
         for checkbox in self.classroom_checkbox_refs.values():
             checkbox.value = False
@@ -455,24 +428,16 @@ class SubjectForm:
                 self.selected_classrooms.remove(classroom_id)
 
     def _on_module_switch_change(self, e):
-        """Показывает/скрывает поля для нового модуля и выпадающий список"""
         is_visible = self.add_new_module_switch.value
 
-        # Если включаем создание нового модуля
         if is_visible:
-            # Показываем поля для нового модуля
             self.new_module_code_field.visible = True
             self.new_module_name_field.visible = True
-            # Скрываем выпадающий список
             self.module_dropdown.visible = False
         else:
-            # Если выключаем создание нового модуля
-            # Скрываем поля для нового модуля
             self.new_module_code_field.visible = False
             self.new_module_name_field.visible = False
-            # Показываем выпадающий список
             self.module_dropdown.visible = True
-            # Очищаем поля нового модуля
             self.new_module_code_field.value = ""
             self.new_module_name_field.value = ""
 
@@ -497,7 +462,6 @@ class SubjectForm:
         else:
             scrollable_content.controls.append(self.module_dropdown)
 
-        # Добавляем блок территорий и кабинетов в прокручиваемую область
         scrollable_content.controls.extend([
             ft.Divider(height=20, color=PALETTE[1]),
             ft.Text("Расположение предмета", size=16, weight="bold", color=PALETTE[2]),
@@ -525,7 +489,6 @@ class SubjectForm:
             border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
         )
 
-        # Основной контейнер - прокручиваемая область + закрепленные кнопки
         return ft.Column([
             ft.Container(
                 content=ft.ListView(
@@ -542,57 +505,44 @@ class SubjectForm:
     def _on_form_submit(self, e):
         subject_name = self.subject_name_field.value.strip()
 
+        # Валидация обязательных полей
+        if error := Validator.validate_required(subject_name, "Название предмета"):
+            self.toast.show(error, success=False)
+            return
+
         if self.add_new_module_switch.value:
-            # Режим создания нового модуля
             module_code = self.new_module_code_field.value.strip()
             module_name = self.new_module_name_field.value.strip()
 
-            if not subject_name:
-                self.toast.show("Введите название предмета!", success=False)
+            if error := Validator.validate_required(module_code, "Код модуля"):
+                self.toast.show(error, success=False)
                 return
 
-            if not module_code or not module_name:
-                self.toast.show("Заполните код и название нового модуля!", success=False)
+            if error := Validator.validate_required(module_name, "Название модуля"):
+                self.toast.show(error, success=False)
                 return
 
-            # Добавляем новый модуль
-            if not self.db_operations.insert_module(module_code, module_name):
-                self.toast.show("Ошибка при добавлении модуля! Возможно, модуль с таким кодом уже существует.",
-                                success=False)
+            # Проверка уникальности модуля
+            if error := Validator.validate_unique(self.db_operations, "Модули", "Код", module_code):
+                self.toast.show(error, success=False)
                 return
 
-            if not self.territory_dropdown.value:
-                self.toast.show("Выберите территорию!", success=False)
-                return
-
-            territory_id = int(self.territory_dropdown.value)
-            classrooms = self.db_operations.get_classrooms_by_territory(territory_id)
-            if not classrooms:
-                self.toast.show("На выбранной территории нет кабинетов!", success=False)
-                return
-
-            # Проверяем что выбраны кабинеты
-            if not self.selected_classrooms:
-                self.toast.show("Выберите хотя бы один кабинет!", success=False)
-                return
-
-            module = module_code  # Используем код модуля как значение
+            module = module_code
         else:
-            # Режим выбора существующего модуля
-            module = self.module_dropdown.value  # Меняем на module
-
-            if not subject_name:
-                self.toast.show("Введите название предмета!", success=False)
-                return
-
+            module = self.module_dropdown.value
             if not module:
                 self.toast.show("Выберите модуль!", success=False)
                 return
 
-        # Проверка на дубликаты
+        # Валидация расположения
+        if error := Validator.validate_classrooms(self.territory_dropdown.value, self.selected_classrooms):
+            self.toast.show(error, success=False)
+            return
+
+        # Валидация уникальности предмета
         if self.edit_mode:
             if (subject_name.upper() != self.original_subject_name.upper() or
-                    module != self.original_module):  # Меняем на module
+                    module != self.original_module):
                 if self.db_operations.check_subject_exists(subject_name, module):
                     self.toast.show(f"Предмет '{subject_name}' с модулем '{module}' уже существует!", success=False)
                     return
@@ -603,7 +553,7 @@ class SubjectForm:
 
         subject_data = {
             'Название': subject_name,
-            'Модуль': module  # Меняем на Модуль
+            'Модуль': module
         }
 
         self.on_submit(subject_data, self.selected_classrooms)
@@ -623,7 +573,6 @@ class ClassroomForm:
         self.original_classroom_number = classroom_data['Номер'] if classroom_data and edit_mode else ""
         self.original_territory_id = classroom_data['ТерриторияID'] if classroom_data and edit_mode else None
 
-        # Загружаем территории для выпадающего списка
         self.territories = self.db_operations.get_territories()
 
         self.classroom_number_field = ft.TextField(
@@ -633,7 +582,6 @@ class ClassroomForm:
             value=classroom_data['Номер'] if classroom_data and edit_mode else "",
         )
 
-        # Выпадающий список для территорий
         territory_options = [ft.dropdown.Option(str(territory['ID']), territory['Название'])
                              for territory in self.territories]
 
@@ -654,7 +602,6 @@ class ClassroomForm:
             value=str(classroom_data.get('Вместимость', '')) if classroom_data and edit_mode else "",
         )
 
-        # Сообщение если нет территорий
         self.no_territories_message = ft.Text(
             "Сначала создайте территории в соответствующем разделе",
             size=14,
@@ -665,7 +612,6 @@ class ClassroomForm:
     def build(self) -> ft.Column:
         title = "Редактировать кабинет" if self.edit_mode else "Добавить кабинет"
 
-        # Прокручиваемая область
         scrollable_content = ft.Column([
             ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
             self.classroom_number_field,
@@ -674,7 +620,6 @@ class ClassroomForm:
             self.capacity_field,
         ], spacing=15)
 
-        # Кнопки ВНЕ прокручиваемой области
         buttons_container = ft.Container(
             content=ft.Row([
                 ft.ElevatedButton(
@@ -710,24 +655,25 @@ class ClassroomForm:
         territory_id = self.territory_dropdown.value
         capacity = self.capacity_field.value.strip()
 
-        if not classroom_number:
-            self.toast.show("Введите номер кабинета!", success=False)
+        # Валидация обязательных полей
+        if error := Validator.validate_required(classroom_number, "Номер кабинета"):
+            self.toast.show(error, success=False)
             return
 
         if not territory_id:
             self.toast.show("Выберите территорию!", success=False)
             return
 
-        # ПРОВЕРКА НА ДУБЛИКАТ КАБИНЕТА
+        # Валидация уникальности
+        territory_id_int = int(territory_id)
         if not self.edit_mode:
-            # При добавлении - проверяем существует ли кабинет
-            if self.db_operations.check_classroom_exists(classroom_number, int(territory_id)):
+            if self.db_operations.check_classroom_exists(classroom_number, territory_id_int):
                 self.toast.show(f"Кабинет '{classroom_number}' уже существует на этой территории!", success=False)
                 return
         else:
-            # При редактировании - проверяем только если изменился номер или территория
-            if (classroom_number != self.original_classroom_number or int(territory_id) != self.original_territory_id):
-                if self.db_operations.check_classroom_exists(classroom_number, int(territory_id)):
+            if (classroom_number != self.original_classroom_number or
+                    territory_id_int != self.original_territory_id):
+                if self.db_operations.check_classroom_exists(classroom_number, territory_id_int):
                     self.toast.show(f"Кабинет '{classroom_number}' уже существует на этой территории!", success=False)
                     return
 

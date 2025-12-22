@@ -47,12 +47,11 @@ class DataTableManager:
 
         selected_row = self.selected_rows.get(section_name, None)
 
-        # Словарь для красивых названий колонок
         pretty_column_names = {
-            "Название": "Территория",  # Для таблицы Территории
-            "Номер": "Номер кабинета",  # Для таблицы Кабинеты
-            "ФИО": "Преподаватель",  # Для таблицы Преподаватели
-            "НазваниеМодуля": "Название модуля"  # Для таблицы Предметы
+            "Название": "Территория",
+            "Номер": "Номер кабинета",
+            "ФИО": "Преподаватель",
+            "НазваниеМодуля": "Название модуля"
         }
 
         for i, row in enumerate(data):
@@ -77,7 +76,6 @@ class DataTableManager:
             )
             data_rows.append(data_row)
 
-        # Используем красивые названия для заголовков колонок
         display_column_headers = [pretty_column_names.get(col, col) for col in display_columns]
 
         return ft.DataTable(
@@ -102,3 +100,91 @@ class DataTableManager:
     def clear_selection(self, section_name: str):
         if section_name in self.selected_rows:
             self.selected_rows[section_name] = None
+
+
+class Validator:
+    @staticmethod
+    def validate_required(value: str, field_name: str) -> Optional[str]:
+        if not value or not value.strip():
+            return f"Поле '{field_name}' обязательно для заполнения"
+        return None
+
+    @staticmethod
+    def validate_unique(db_operations, table_name: str, field_name: str, value: str,
+                        exclude_id: Optional[int] = None) -> Optional[str]:
+        """Проверка уникальности значения в таблице"""
+        try:
+            if table_name == "Группы":
+                # Специальная проверка для групп
+                existing_groups = db_operations.get_groups_with_subgroups()
+                for group in existing_groups:
+                    if group['Группа'].upper() == value.upper():
+                        if exclude_id and group['ID'] == exclude_id:
+                            continue
+                        return f"Группа '{value}' уже существует"
+            elif table_name == "Территории":
+                if db_operations.check_territory_exists(value):
+                    if not exclude_id or not _is_same_territory(db_operations, exclude_id, value):
+                        return f"Территория '{value}' уже существует"
+            elif table_name == "Преподаватели":
+                if db_operations.check_teacher_exists(value):
+                    if not exclude_id or not _is_same_teacher(db_operations, exclude_id, value):
+                        return f"Преподаватель '{value}' уже существует"
+            elif table_name == "Модули":
+                if db_operations.check_module_exists(value):
+                    if not exclude_id or not _is_same_module(db_operations, exclude_id, value):
+                        return f"Модуль с кодом '{value}' уже существует"
+            elif table_name == "Кабинеты":
+                # Для кабинетов нужна специальная обработка
+                pass  # Обрабатывается отдельно
+            return None
+        except Exception as e:
+            print(f"Ошибка при проверке уникальности: {e}")
+            return "Ошибка при проверке данных"
+
+    @staticmethod
+    def validate_subgroups(group_name: str, subgroups: List[str]) -> Optional[str]:
+        if not subgroups:
+            return "Выберите хотя бы одну подгруппу"
+
+        if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and "Нет" in subgroups:
+            return "Группы ХКО и ХБО должны иметь подгруппы"
+
+        return None
+
+    @staticmethod
+    def validate_classrooms(territory_id: Optional[str], selected_classrooms: List[int]) -> Optional[str]:
+        if not territory_id:
+            return "Выберите территорию"
+
+        if not selected_classrooms:
+            return "Выберите хотя бы один кабинет"
+
+        return None
+
+
+def _is_same_territory(db_operations, territory_id: int, name: str) -> bool:
+    """Проверяет, относится ли имя к той же территории"""
+    territories = db_operations.get_table_data("Территории")
+    for territory in territories:
+        if territory['ID'] == territory_id:
+            return territory['Название'].upper() == name.upper()
+    return False
+
+
+def _is_same_teacher(db_operations, teacher_id: int, name: str) -> bool:
+    """Проверяет, относится ли имя к тому же преподавателю"""
+    teachers = db_operations.get_table_data("Преподаватели")
+    for teacher in teachers:
+        if teacher['ID'] == teacher_id:
+            return teacher['ФИО'].upper() == name.upper()
+    return False
+
+
+def _is_same_module(db_operations, module_code: str, name: str) -> bool:
+    """Проверяет, относится ли имя к тому же модулю"""
+    modules = db_operations.get_modules()
+    for module in modules:
+        if module['Код'] == module_code:
+            return module['Код'].upper() == name.upper()
+    return False
