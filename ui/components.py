@@ -162,6 +162,38 @@ class Validator:
 
         return None
 
+    @staticmethod
+    def validate_teacher_preferences(preferences_str: str) -> Optional[str]:
+        """Проверка предпочтений преподавателя"""
+        if not preferences_str:
+            return None
+
+        try:
+            day_blocks = preferences_str.split(';')
+            valid_days = ["пн", "вт", "ср", "чт", "пт", "сб"]
+
+            for block in day_blocks:
+                if ':' not in block:
+                    return f"Некорректный формат предпочтений: {block}"
+
+                day, lessons_str = block.split(':')
+                day = day.strip()
+
+                if day not in valid_days:
+                    return f"Некорректный день: {day}"
+
+                lessons = [l.strip() for l in lessons_str.split(',') if l.strip()]
+                for lesson in lessons:
+                    try:
+                        lesson_num = int(lesson)
+                        if lesson_num < 1 or lesson_num > 11:
+                            return f"Номер урока должен быть от 1 до 11: {lesson}"
+                    except ValueError:
+                        return f"Некорректный номер урока: {lesson}"
+            return None
+        except Exception as e:
+            return f"Ошибка при проверке предпочтений: {str(e)}"
+
 
 def _is_same_territory(db_operations, territory_id: int, name: str) -> bool:
     """Проверяет, относится ли имя к той же территории"""

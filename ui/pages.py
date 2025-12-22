@@ -2,7 +2,7 @@ import flet as ft
 from typing import Callable, List, Dict, Any, Optional
 from database.operations import DBOperations
 from ui.components import Toast, DataTableManager, PALETTE, Validator
-from ui.forms import GroupForm, ClassroomForm
+from ui.forms import GroupForm, ClassroomForm, TeacherForm
 
 
 class BasePage:
@@ -131,7 +131,17 @@ class DataPane(BasePage):
             columns = ["ID", "Предмет", "Код модуля", "Название модуля"]
         elif section_name == "Преподаватели":
             data = self.db_ops.get_table_data("Преподаватели")
-            columns = ["ID", "ФИО", "Нагрузка", "Дни", "Уроки"]
+            display_data = []
+            for teacher in data:
+                preferences = teacher.get('Предпочтения', '')
+                display_prefs = self._format_preferences_for_display(preferences)
+                display_data.append({
+                    'ID': teacher['ID'],
+                    'ФИО': teacher['ФИО'],
+                    'Предпочтения': display_prefs
+                })
+            columns = ["ID", "ФИО", "Предпочтения"]
+            data = display_data
         elif section_name == "Территории":
             data = self.db_ops.get_table_data("Территории")
             columns = ["ID", "Название", "Цвет"]
@@ -231,6 +241,8 @@ class DataPane(BasePage):
                 self._render_edit_group_form(record)
             elif section_name == "Предметы":
                 self._render_edit_subject_form(record)
+            elif section_name == "Преподаватели":
+                self._render_edit_teacher_form(record)
             elif section_name == "Кабинеты":
                 self._render_edit_classroom_form(record)
             else:
@@ -289,11 +301,38 @@ class DataPane(BasePage):
 
         self.page.update()
 
+    def _format_preferences_for_display(self, preferences_str: str) -> str:
+        """Форматирование предпочтений для отображения в таблице"""
+        if not preferences_str:
+            return "Нет"
+
+        try:
+            parts = []
+            day_blocks = preferences_str.split(';')
+            for block in day_blocks:
+                if ':' in block:
+                    day, lessons = block.split(':')
+                    day_name = {
+                        'пн': 'Пн',
+                        'вт': 'Вт',
+                        'ср': 'Ср',
+                        'чт': 'Чт',
+                        'пт': 'Пт',
+                        'сб': 'Сб'
+                    }.get(day, day)
+                    parts.append(f"{day_name}: {lessons}")
+
+            return '; '.join(parts)
+        except:
+            return preferences_str
+
     def _render_add_form(self, table_name: str, columns: List[str]):
         if table_name == "Группы":
             self._render_group_add_form()
         elif table_name == "Предметы":
             self._render_add_subject_form()
+        elif table_name == "Преподаватели":
+            self._render_teacher_add_form()
         elif table_name == "Кабинеты":
             self._render_add_classroom_form()
         else:
@@ -423,16 +462,10 @@ class DataPane(BasePage):
 
         title = title_map.get(table_name, f"Добавить {table_name.lower()}")
 
-        if table_name.endswith('ы'):
-            title = f"Добавить {table_name[:-1].lower()}у"
-        elif table_name.endswith('и'):
-            title = f"Добавить {table_name[:-1].lower()}ь"
-
         scrollable_content = ft.Column([
             ft.Text(title, size=18, weight="bold", color=PALETTE[2])
         ], spacing=15)
 
-        # Создаем поля формы в зависимости от таблицы
         for column in columns:
             if column.lower() != 'id':
                 if table_name == "Кабинеты" and column == "ТерриторияID":
@@ -543,6 +576,9 @@ class DataPane(BasePage):
         if table_name == "Кабинеты":
             self._render_edit_classroom_form(record)
             return
+        if table_name == "Преподаватели":
+            self._render_edit_teacher_form(record)
+            return
 
         form_fields_ref = {}
 
@@ -590,27 +626,6 @@ class DataPane(BasePage):
                 if new_module_code != record['Код']:
                     if self.db_ops.check_module_exists(new_module_code):
                         errors.append(f"Модуль с кодом '{new_module_code}' уже существует!")
-
-            if table_name == "Преподаватели":
-                if data.get('Нагрузка'):
-                    try:
-                        workload = int(data['Нагрузка'])
-                        if workload < 0:
-                            errors.append("Нагрузка не может быть отрицательной!")
-                    except ValueError:
-                        errors.append("Нагрузка должна быть числом!")
-                if data.get('Уроки'):
-                    try:
-                        lessons = int(data['Уроки'])
-                        if lessons < 0:
-                            errors.append("Количество уроков не может быть отрицательным!")
-                    except ValueError:
-                        errors.append("Количество уроков должно быть числом!")
-
-            if errors:
-                for error in errors:
-                    self.toast.show(error, success=False)
-                return
 
             clean_data = {}
             for column, value in data.items():
@@ -809,7 +824,6 @@ class DataPane(BasePage):
         def on_form_submit(classroom_data):
             current_territory_id = self.db_ops.get_territory_id_by_name(record['Территория'])
 
-            # Проверка уникальности при изменении номера или территории
             if (classroom_data['Номер'] != record['Номер кабинета'] or
                     classroom_data['ТерриторияID'] != current_territory_id):
 
@@ -901,6 +915,59 @@ class DataPane(BasePage):
 
         self.content.content = ft.Container(
             content=subject_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_teacher_add_form(self):
+        def on_form_submit(teacher_data):
+            success = self.db_ops.insert_data("Преподаватели", teacher_data)
+            if success:
+                self.toast.show("Преподаватель успешно добавлен!", success=True)
+                self.render("Преподаватели")
+            else:
+                self.toast.show("Ошибка при добавлении преподавателя!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Преподаватели")
+
+        teacher_form = TeacherForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        teacher_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=teacher_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_teacher_form(self, record):
+        def on_form_submit(teacher_data):
+            success = self.db_ops.update_record("Преподаватели", record['ID'], teacher_data)
+            if success:
+                self.toast.show("Преподаватель успешно обновлен!", success=True)
+                self.render("Преподаватели")
+            else:
+                self.toast.show("Ошибка при обновлении преподавателя!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Преподаватели")
+
+        teacher_data = {
+            'ФИО': record['ФИО'],
+            'Дни': record['Дни'] if record['Дни'] != 'Нет' else '',
+            'Уроки': record['Уроки'] if record['Уроки'] != 'Нет' else ''
+        }
+
+        teacher_form = TeacherForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                   edit_mode=True, teacher_data=teacher_data)
+        teacher_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=teacher_form.build(),
             padding=20,
             expand=True
         )

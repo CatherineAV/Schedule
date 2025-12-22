@@ -541,3 +541,17 @@ class DBOperations:
             print(f"Ошибка при получении ID территории по названию: {e}")
             return None
 
+    def get_teachers_with_preferences(self) -> List[Dict[str, Any]]:
+        """Получение преподавателей с предпочтениями"""
+        try:
+            teachers = self.db.execute_query("SELECT * FROM Преподаватели ORDER BY ФИО")
+            # Форматируем данные для отображения
+            for teacher in teachers:
+                if teacher.get('Дни'):
+                    teacher['Дни'] = teacher['Дни'].replace(',', ', ')
+                if teacher.get('Уроки'):
+                    teacher['Уроки'] = teacher['Уроки'].replace(',', ', ')
+            return teachers
+        except Exception as e:
+            print(f"Ошибка при получении преподавателей: {e}")
+            return []

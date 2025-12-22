@@ -68,8 +68,7 @@ class Database:
         CREATE TABLE IF NOT EXISTS Преподаватели (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ФИО TEXT NOT NULL,
-            Дни TEXT,
-            Уроки INTEGER
+            Предпочтения TEXT
         );
 
         CREATE TABLE IF NOT EXISTS Преподаватель_Территория (

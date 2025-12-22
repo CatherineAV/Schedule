@@ -693,3 +693,191 @@ class ClassroomForm:
 
     def set_page(self, page: ft.Page):
         self.page = page
+
+
+class TeacherForm:
+    def __init__(self, on_submit: Callable, on_cancel: Callable, db_operations, toast,
+                 edit_mode: bool = False, teacher_data: Optional[Dict] = None):
+        self.on_submit = on_submit
+        self.on_cancel = on_cancel
+        self.db_operations = db_operations
+        self.toast = toast
+        self.edit_mode = edit_mode
+        self.original_teacher_name = teacher_data['ФИО'] if teacher_data and edit_mode else ""
+
+        # Словарь для хранения связи день-уроки
+        self.day_lessons = {
+            'пн': [],
+            'вт': [],
+            'ср': [],
+            'чт': [],
+            'пт': [],
+            'сб': []
+        }
+
+        # Загружаем сохраненные данные если редактируем
+        if edit_mode and teacher_data:
+            self._load_saved_preferences(teacher_data)
+
+        # Поле ФИО
+        self.full_name_field = ft.TextField(
+            label="ФИО преподавателя",
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            value=teacher_data['ФИО'] if teacher_data and edit_mode else "",
+        )
+
+        # Создаем таблицу дней с уроками
+        self.preferences_container = self._create_preferences_table()
+
+    def _load_saved_preferences(self, teacher_data: Dict):
+        """Загрузка сохраненных предпочтений из базы данных"""
+        # Формат хранения в БД: "пн:1,2,3;вт:4,5;ср:2,3"
+        preferences_str = teacher_data.get('Предпочтения', '')
+        if not preferences_str:
+            return
+
+        try:
+            day_blocks = preferences_str.split(';')
+            for block in day_blocks:
+                if ':' in block:
+                    day, lessons_str = block.split(':')
+                    day = day.strip()
+                    if day in self.day_lessons:
+                        lessons = [l.strip() for l in lessons_str.split(',') if l.strip()]
+                        self.day_lessons[day] = lessons
+        except Exception as e:
+            print(f"Ошибка при загрузке предпочтений: {e}")
+
+    def _create_preferences_table(self) -> ft.Column:
+        """Создание таблицы дней с уроками"""
+        days = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб']
+        lessons_options = [str(i) for i in range(1, 12)]  # 1-11
+
+        table_rows = []
+
+        for day in days:
+            # Заголовок дня
+            day_row = ft.Row([
+                ft.Text(day, size=14, weight="bold", color=PALETTE[2], width=40),
+            ])
+
+            # Чекбоксы уроков для этого дня
+            lesson_checkboxes = []
+            for lesson in lessons_options:
+                checkbox = ft.Checkbox(
+                    label=lesson,
+                    value=lesson in self.day_lessons[day],
+                    label_style=ft.TextStyle(color=PALETTE[2], size=12),
+                    border_side=ft.BorderSide(width=1, color=PALETTE[2]),
+                    on_change=lambda e, d=day, l=lesson: self._on_lesson_checkbox_change(d, l, e.control.value)
+                )
+                lesson_checkboxes.append(checkbox)
+
+            # Разбиваем уроки на строки по 6 штук для удобства
+            lesson_rows = []
+            for i in range(0, len(lesson_checkboxes), 6):
+                row_checkboxes = lesson_checkboxes[i:i + 6]
+                lesson_rows.append(
+                    ft.Row(row_checkboxes, spacing=5)
+                )
+
+            day_container = ft.Column([
+                day_row,
+                *lesson_rows
+            ], spacing=5)
+
+            table_rows.append(day_container)
+            table_rows.append(ft.Divider(height=1, color=PALETTE[1]))
+
+        return ft.Column(table_rows, spacing=10)
+
+    def _on_lesson_checkbox_change(self, day: str, lesson: str, is_checked: bool):
+        """Обработка изменения чекбокса урока"""
+        if is_checked:
+            if lesson not in self.day_lessons[day]:
+                self.day_lessons[day].append(lesson)
+        else:
+            if lesson in self.day_lessons[day]:
+                self.day_lessons[day].remove(lesson)
+
+    def build(self) -> ft.Column:
+        title = "Редактировать преподавателя" if self.edit_mode else "Добавить преподавателя"
+
+        scrollable_content = ft.Column([
+            ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
+            self.full_name_field,
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Text("Предпочтения по дням и урокам (необязательно)", size=16, weight="bold", color=PALETTE[2]),
+            ft.Text("Выберите предпочтительные уроки для каждого дня:", size=12, color=PALETTE[2]),
+            self.preferences_container,
+        ], spacing=15)
+
+        buttons_container = ft.Container(
+            content=ft.Row([
+                ft.ElevatedButton(
+                    "Сохранить",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
+                    on_click=self._on_form_submit
+                ),
+                ft.ElevatedButton(
+                    "Отмена",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                    on_click=self.on_cancel
+                )
+            ], alignment=ft.MainAxisAlignment.END, spacing=20),
+            padding=ft.padding.only(top=20),
+            border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
+        )
+
+        return ft.Column([
+            ft.Container(
+                content=ft.ListView(
+                    [scrollable_content],
+                    expand=True,
+                    spacing=0,
+                    padding=0
+                ),
+                expand=True
+            ),
+            buttons_container
+        ], expand=True)
+
+    def _on_form_submit(self, e):
+        full_name = self.full_name_field.value.strip()
+
+        # Валидация обязательных полей
+        if error := Validator.validate_required(full_name, "ФИО преподавателя"):
+            self.toast.show(error, success=False)
+            return
+
+        # Валидация уникальности
+        if self.edit_mode:
+            if full_name.upper() != self.original_teacher_name.upper():
+                if error := Validator.validate_unique(self.db_operations, "Преподаватели", "ФИО", full_name):
+                    self.toast.show(error, success=False)
+                    return
+        else:
+            if error := Validator.validate_unique(self.db_operations, "Преподаватели", "ФИО", full_name):
+                self.toast.show(error, success=False)
+                return
+
+        # Формируем строку предпочтений
+        preferences_parts = []
+        for day, lessons in self.day_lessons.items():
+            if lessons:  # Если есть выбранные уроки для этого дня
+                lessons_sorted = sorted(lessons, key=int)
+                preferences_parts.append(f"{day}:{','.join(lessons_sorted)}")
+
+        preferences_str = ';'.join(preferences_parts) if preferences_parts else None
+
+        # Подготовка данных
+        teacher_data = {
+            'ФИО': full_name,
+            'Предпочтения': preferences_str
+        }
+
+        self.on_submit(teacher_data)
+
+    def set_page(self, page: ft.Page):
+        self.page = page
