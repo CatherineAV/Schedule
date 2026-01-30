@@ -130,18 +130,8 @@ class DataPane(BasePage):
             data = self.db_ops.get_subjects_with_module_names()
             columns = ["ID", "Предмет", "Код модуля", "Название модуля"]
         elif section_name == "Преподаватели":
-            data = self.db_ops.get_table_data("Преподаватели")
-            display_data = []
-            for teacher in data:
-                preferences = teacher.get('Предпочтения', '')
-                display_prefs = self._format_preferences_for_display(preferences)
-                display_data.append({
-                    'ID': teacher['ID'],
-                    'ФИО': teacher['ФИО'],
-                    'Предпочтения': display_prefs
-                })
-            columns = ["ID", "ФИО", "Предпочтения"]
-            data = display_data
+            data = self.db_ops.get_teachers_with_preferences()
+            columns = ["ID", "ФИО", "Совместитель", "Дни занятий", "Территория"]
         elif section_name == "Территории":
             data = self.db_ops.get_table_data("Территории")
             columns = ["ID", "Название", "Цвет"]
@@ -923,7 +913,8 @@ class DataPane(BasePage):
 
     def _render_teacher_add_form(self):
         def on_form_submit(teacher_data):
-            success = self.db_ops.insert_data("Преподаватели", teacher_data)
+            territory_ids = teacher_data.pop('Территории', [])
+            success = self.db_ops.insert_teacher_with_territories(teacher_data, territory_ids)
             if success:
                 self.toast.show("Преподаватель успешно добавлен!", success=True)
                 self.render("Преподаватели")
@@ -946,7 +937,8 @@ class DataPane(BasePage):
 
     def _render_edit_teacher_form(self, record):
         def on_form_submit(teacher_data):
-            success = self.db_ops.update_record("Преподаватели", record['ID'], teacher_data)
+            territory_ids = teacher_data.pop('Территории', [])
+            success = self.db_ops.update_teacher_with_territories(record['ID'], teacher_data, territory_ids)
             if success:
                 self.toast.show("Преподаватель успешно обновлен!", success=True)
                 self.render("Преподаватели")
@@ -956,10 +948,19 @@ class DataPane(BasePage):
         def on_form_cancel(e):
             self.render("Преподаватели")
 
+        teacher_territories = self.db_ops.get_teacher_territories(record['ID'])
+        territory_ids = [t['ID'] for t in teacher_territories]
+        is_part_timer = record.get('Совместитель', 'Нет') == 'Да'
+
+        days_str = record.get('Дни занятий', '')
+        if days_str == 'Любые':
+            days_str = ''
+
         teacher_data = {
             'ФИО': record['ФИО'],
-            'Дни': record['Дни'] if record['Дни'] != 'Нет' else '',
-            'Уроки': record['Уроки'] if record['Уроки'] != 'Нет' else ''
+            'Совместитель': is_part_timer,
+            '[Дни занятий]': days_str,
+            'Территории': territory_ids
         }
 
         teacher_form = TeacherForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,

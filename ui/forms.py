@@ -505,7 +505,6 @@ class SubjectForm:
     def _on_form_submit(self, e):
         subject_name = self.subject_name_field.value.strip()
 
-        # Валидация обязательных полей
         if error := Validator.validate_required(subject_name, "Название предмета"):
             self.toast.show(error, success=False)
             return
@@ -522,7 +521,6 @@ class SubjectForm:
                 self.toast.show(error, success=False)
                 return
 
-            # Проверка уникальности модуля
             if error := Validator.validate_unique(self.db_operations, "Модули", "Код", module_code):
                 self.toast.show(error, success=False)
                 return
@@ -534,12 +532,10 @@ class SubjectForm:
                 self.toast.show("Выберите модуль!", success=False)
                 return
 
-        # Валидация расположения
         if error := Validator.validate_classrooms(self.territory_dropdown.value, self.selected_classrooms):
             self.toast.show(error, success=False)
             return
 
-        # Валидация уникальности предмета
         if self.edit_mode:
             if (subject_name.upper() != self.original_subject_name.upper() or
                     module != self.original_module):
@@ -655,7 +651,6 @@ class ClassroomForm:
         territory_id = self.territory_dropdown.value
         capacity = self.capacity_field.value.strip()
 
-        # Валидация обязательных полей
         if error := Validator.validate_required(classroom_number, "Номер кабинета"):
             self.toast.show(error, success=False)
             return
@@ -664,7 +659,6 @@ class ClassroomForm:
             self.toast.show("Выберите территорию!", success=False)
             return
 
-        # Валидация уникальности
         territory_id_int = int(territory_id)
         if not self.edit_mode:
             if self.db_operations.check_classroom_exists(classroom_number, territory_id_int):
@@ -705,21 +699,17 @@ class TeacherForm:
         self.edit_mode = edit_mode
         self.original_teacher_name = teacher_data['ФИО'] if teacher_data and edit_mode else ""
 
-        # Словарь для хранения связи день-уроки
-        self.day_lessons = {
-            'пн': [],
-            'вт': [],
-            'ср': [],
-            'чт': [],
-            'пт': [],
-            'сб': []
-        }
+        saved_days = []
+        saved_part_timer = False
+        saved_territories = []
 
-        # Загружаем сохраненные данные если редактируем
         if edit_mode and teacher_data:
-            self._load_saved_preferences(teacher_data)
+            saved_part_timer = teacher_data.get('Совместитель', False)
+            saved_days_str = teacher_data.get('[Дни занятий]', '')
+            if saved_days_str and saved_days_str != 'Любые':
+                saved_days = [day.strip() for day in saved_days_str.split(',')]
+            saved_territories = teacher_data.get('Территории', [])
 
-        # Поле ФИО
         self.full_name_field = ft.TextField(
             label="ФИО преподавателя",
             border_color=PALETTE[3],
@@ -727,79 +717,138 @@ class TeacherForm:
             value=teacher_data['ФИО'] if teacher_data and edit_mode else "",
         )
 
-        # Создаем таблицу дней с уроками
-        self.preferences_container = self._create_preferences_table()
+        self.part_timer_switch = ft.Switch(
+            label=" Совместитель",
+            value=saved_part_timer,
+            label_style=ft.TextStyle(color=PALETTE[2]),
+        )
 
-    def _load_saved_preferences(self, teacher_data: Dict):
-        """Загрузка сохраненных предпочтений из базы данных"""
-        # Формат хранения в БД: "пн:1,2,3;вт:4,5;ср:2,3"
-        preferences_str = teacher_data.get('Предпочтения', '')
-        if not preferences_str:
+        self.day_checkboxes = {}
+        self.selected_days = saved_days.copy()
+
+        days_of_week = [
+            ("пн", "Понедельник"),
+            ("вт", "Вторник"),
+            ("ср", "Среда"),
+            ("чт", "Четверг"),
+            ("пт", "Пятница"),
+            ("сб", "Суббота")
+        ]
+
+        day_checkbox_list = []
+        for day_code, day_name in days_of_week:
+            checkbox = ft.Checkbox(
+                label=day_name,
+                value=day_code in self.selected_days,
+                label_style=ft.TextStyle(color=PALETTE[2]),
+                border_side=ft.BorderSide(width=1, color=PALETTE[2]),
+                on_change=lambda e, d=day_code: self._on_day_change(d, e.control.value)
+            )
+            self.day_checkboxes[day_code] = checkbox
+            day_checkbox_list.append(checkbox)
+
+        self.days_row1 = ft.Row(
+            controls=day_checkbox_list[:3],
+            spacing=20
+        )
+
+        self.days_row2 = ft.Row(
+            controls=day_checkbox_list[3:],
+            spacing=20
+        )
+
+        self.days_column = ft.Column(
+            controls=[self.days_row1, self.days_row2],
+            spacing=10
+        )
+
+        self.territories = self.db_operations.get_territories()
+        self.selected_territories = saved_territories.copy()
+
+        self.territory_checkbox_refs = {}
+        self.territory_listview = ft.ListView(
+            expand=False,
+            height=150,
+            spacing=5,
+            padding=10,
+            visible=False
+        )
+
+        self.territory_container = ft.Container(
+            content=self.territory_listview,
+            border=ft.border.all(1, PALETTE[1]),
+            border_radius=5,
+            visible=False
+        )
+
+        self.no_territories_message = ft.Text(
+            "Сначала создайте территории в соответствующем разделе",
+            size=14,
+            color=ft.Colors.ORANGE_700,
+            visible=len(self.territories) == 0
+        )
+
+        if self.territories:
+            self._load_territories()
+
+        self.info_note = ft.Text(
+            "Если дни не выбраны, преподаватель может вести занятия в любые дни",
+            size=12,
+            color=ft.Colors.BLUE_700,
+            italic=True
+        )
+
+    def _load_territories(self):
+        if not self.territories:
             return
 
-        try:
-            day_blocks = preferences_str.split(';')
-            for block in day_blocks:
-                if ':' in block:
-                    day, lessons_str = block.split(':')
-                    day = day.strip()
-                    if day in self.day_lessons:
-                        lessons = [l.strip() for l in lessons_str.split(',') if l.strip()]
-                        self.day_lessons[day] = lessons
-        except Exception as e:
-            print(f"Ошибка при загрузке предпочтений: {e}")
+        self.territory_listview.controls.clear()
+        self.territory_checkbox_refs.clear()
 
-    def _create_preferences_table(self) -> ft.Column:
-        """Создание таблицы дней с уроками"""
-        days = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб']
-        lessons_options = [str(i) for i in range(1, 12)]  # 1-11
+        items_per_row = 4
 
-        table_rows = []
+        for i in range(0, len(self.territories), items_per_row):
+            row_territories = self.territories[i:i + items_per_row]
 
-        for day in days:
-            # Заголовок дня
-            day_row = ft.Row([
-                ft.Text(day, size=14, weight="bold", color=PALETTE[2], width=40),
-            ])
-
-            # Чекбоксы уроков для этого дня
-            lesson_checkboxes = []
-            for lesson in lessons_options:
+            row_controls = []
+            for territory in row_territories:
+                is_checked = territory['ID'] in self.selected_territories
                 checkbox = ft.Checkbox(
-                    label=lesson,
-                    value=lesson in self.day_lessons[day],
-                    label_style=ft.TextStyle(color=PALETTE[2], size=12),
-                    border_side=ft.BorderSide(width=1, color=PALETTE[2]),
-                    on_change=lambda e, d=day, l=lesson: self._on_lesson_checkbox_change(d, l, e.control.value)
+                    label=territory['Название'],
+                    value=is_checked,
+                    label_style=ft.TextStyle(color=PALETTE[2]),
+                    on_change=lambda e, territory_id=territory['ID']: self._on_territory_change(territory_id,
+                                                                                                e.control.value)
                 )
-                lesson_checkboxes.append(checkbox)
+                self.territory_checkbox_refs[territory['ID']] = checkbox
+                row_controls.append(checkbox)
 
-            # Разбиваем уроки на строки по 6 штук для удобства
-            lesson_rows = []
-            for i in range(0, len(lesson_checkboxes), 6):
-                row_checkboxes = lesson_checkboxes[i:i + 6]
-                lesson_rows.append(
-                    ft.Row(row_checkboxes, spacing=5)
-                )
+            row = ft.Row(
+                controls=row_controls,
+                spacing=10,
+                wrap=False
+            )
+            self.territory_listview.controls.append(row)
 
-            day_container = ft.Column([
-                day_row,
-                *lesson_rows
-            ], spacing=5)
+        self.territory_listview.visible = True
+        self.territory_container.visible = True
+        self.no_territories_message.visible = False
 
-            table_rows.append(day_container)
-            table_rows.append(ft.Divider(height=1, color=PALETTE[1]))
-
-        return ft.Column(table_rows, spacing=10)
-
-    def _on_lesson_checkbox_change(self, day: str, lesson: str, is_checked: bool):
-        """Обработка изменения чекбокса урока"""
+    def _on_territory_change(self, territory_id: int, is_checked: bool):
         if is_checked:
-            if lesson not in self.day_lessons[day]:
-                self.day_lessons[day].append(lesson)
+            if territory_id not in self.selected_territories:
+                self.selected_territories.append(territory_id)
         else:
-            if lesson in self.day_lessons[day]:
-                self.day_lessons[day].remove(lesson)
+            if territory_id in self.selected_territories:
+                self.selected_territories.remove(territory_id)
+
+    def _on_day_change(self, day_code: str, is_checked: bool):
+        if is_checked:
+            if day_code not in self.selected_days:
+                self.selected_days.append(day_code)
+        else:
+            if day_code in self.selected_days:
+                self.selected_days.remove(day_code)
 
     def build(self) -> ft.Column:
         title = "Редактировать преподавателя" if self.edit_mode else "Добавить преподавателя"
@@ -807,10 +856,15 @@ class TeacherForm:
         scrollable_content = ft.Column([
             ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
             self.full_name_field,
+            self.part_timer_switch,
             ft.Divider(height=20, color=PALETTE[1]),
-            ft.Text("Предпочтения по дням и урокам (необязательно)", size=16, weight="bold", color=PALETTE[2]),
-            ft.Text("Выберите предпочтительные уроки для каждого дня:", size=12, color=PALETTE[2]),
-            self.preferences_container,
+            ft.Text("Территории", size=16, weight="bold", color=PALETTE[2]),
+            self.no_territories_message,
+            self.territory_container,
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Text("Дни занятий (необязательно)", size=16, weight="bold", color=PALETTE[2]),
+            self.info_note,
+            self.days_column,
         ], spacing=15)
 
         buttons_container = ft.Container(
@@ -845,13 +899,16 @@ class TeacherForm:
 
     def _on_form_submit(self, e):
         full_name = self.full_name_field.value.strip()
+        is_part_timer = self.part_timer_switch.value
 
-        # Валидация обязательных полей
         if error := Validator.validate_required(full_name, "ФИО преподавателя"):
             self.toast.show(error, success=False)
             return
 
-        # Валидация уникальности
+        if len(self.selected_territories) == 0:
+            self.toast.show("Выберите хотя бы одну территорию!", success=False)
+            return
+
         if self.edit_mode:
             if full_name.upper() != self.original_teacher_name.upper():
                 if error := Validator.validate_unique(self.db_operations, "Преподаватели", "ФИО", full_name):
@@ -862,19 +919,13 @@ class TeacherForm:
                 self.toast.show(error, success=False)
                 return
 
-        # Формируем строку предпочтений
-        preferences_parts = []
-        for day, lessons in self.day_lessons.items():
-            if lessons:  # Если есть выбранные уроки для этого дня
-                lessons_sorted = sorted(lessons, key=int)
-                preferences_parts.append(f"{day}:{','.join(lessons_sorted)}")
+        days_str = ', '.join(sorted(self.selected_days)) if self.selected_days else None
 
-        preferences_str = ';'.join(preferences_parts) if preferences_parts else None
-
-        # Подготовка данных
         teacher_data = {
             'ФИО': full_name,
-            'Предпочтения': preferences_str
+            'Совместитель': is_part_timer,
+            '[Дни занятий]': days_str,
+            'Территории': self.selected_territories
         }
 
         self.on_submit(teacher_data)

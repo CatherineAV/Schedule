@@ -21,9 +21,8 @@ class Subgroup:
 class Teacher:
     id: Optional[int] = None
     full_name: str = ""
-    workload: Optional[int] = None
-    days: Optional[str] = None
-    lessons: Optional[int] = None
+    is_part_timer: bool = False
+    work_days: Optional[str] = None
 
 
 @dataclass

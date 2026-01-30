@@ -1,7 +1,6 @@
 import sqlite3
 from typing import List, Dict, Any, Optional
 
-
 class Database:
     def __init__(self, db_name: str = "schedule.db"):
         self.db_name = db_name
@@ -47,7 +46,7 @@ class Database:
         CREATE TABLE IF NOT EXISTS Территории (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             Название TEXT NOT NULL,
-            Цвет TEXT
+            Цвет TEXT DEFAULT '#FFFFFF'
         );
 
         CREATE TABLE IF NOT EXISTS Кабинеты (
@@ -68,7 +67,8 @@ class Database:
         CREATE TABLE IF NOT EXISTS Преподаватели (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ФИО TEXT NOT NULL,
-            Предпочтения TEXT
+            Совместитель BOOLEAN DEFAULT 0,
+            [Дни занятий] TEXT
         );
 
         CREATE TABLE IF NOT EXISTS Преподаватель_Территория (

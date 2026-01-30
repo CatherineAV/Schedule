@@ -8,7 +8,6 @@ class DBOperations:
         self.db = Database(db_name)
 
     def get_table_data(self, table_name: str) -> List[Dict[str, Any]]:
-        """Получение всех данных из таблицы"""
         try:
             return self.db.execute_query(f"SELECT * FROM {table_name}")
         except Exception as e:
@@ -16,7 +15,6 @@ class DBOperations:
             return []
 
     def get_table_columns(self, table_name: str) -> List[str]:
-        """Получение списка колонок таблицы"""
         conn = self.db._get_connection()
         cursor = conn.cursor()
 
@@ -30,9 +28,7 @@ class DBOperations:
             conn.close()
 
     def insert_data(self, table_name: str, data: Dict[str, Any]) -> bool:
-        """Вставка данных в таблицу"""
         try:
-            # Убираем ID если он есть (для автоинкремента)
             clean_data = {k: v for k, v in data.items() if k.upper() != 'ID'}
 
             if not clean_data:
@@ -49,7 +45,6 @@ class DBOperations:
             return False
 
     def delete_record(self, table_name: str, record_id: int) -> bool:
-        """Удаление записи по ID"""
         try:
             return self.db.execute_command(f"DELETE FROM {table_name} WHERE ID = ?", (record_id,))
         except Exception as e:
@@ -57,9 +52,7 @@ class DBOperations:
             return False
 
     def update_record(self, table_name: str, record_id: int, data: Dict[str, Any]) -> bool:
-        """Обновление записи по ID"""
         try:
-            # Убираем ID из данных для обновления
             clean_data = {k: v for k, v in data.items() if k.upper() != 'ID'}
 
             if not clean_data:
@@ -76,7 +69,6 @@ class DBOperations:
             return False
 
     def get_groups_with_subgroups(self) -> List[Dict[str, Any]]:
-        """Получение групп с подгруппами"""
         try:
             query = """
             SELECT g.ID, g.Название as Группа, g.Самообразование, g.[Разговоры о важном],
@@ -91,36 +83,28 @@ class DBOperations:
             return []
 
     def insert_group_with_subgroups(self, group_data: Dict[str, Any], subgroups: List[str]) -> bool:
-        """Добавление группы с подгруппами"""
         conn = self.db._get_connection()
         cursor = conn.cursor()
 
         try:
-            # Проверка существования группы с таким названием
             existing_groups = self.get_groups_with_subgroups()
             group_name = group_data['Название']
 
-            # Проверяем, существует ли уже группа с таким названием
             for existing in existing_groups:
                 if existing['Группа'].upper() == group_name.upper():
-                    # Если группа существует, проверяем подгруппы
                     existing_subgroups = [existing['Подгруппа'] for existing in existing_groups
                                           if existing['Группа'].upper() == group_name.upper()]
 
-                    # Если пытаемся добавить "Нет" когда уже есть подгруппы
                     if "Нет" in subgroups and len(existing_subgroups) > 0 and "Нет" not in existing_subgroups:
                         return False
 
-                    # Если пытаемся добавить подгруппы когда уже есть "Нет"
                     if "Нет" not in subgroups and "Нет" in existing_subgroups:
                         return False
 
-                    # Проверяем дублирование подгрупп
                     for subgroup in subgroups:
                         if subgroup in existing_subgroups:
                             return False
 
-            # Вставляем группу
             cursor.execute(
                 "INSERT INTO Группы (Название, Самообразование, [Разговоры о важном]) VALUES (?, ?, ?)",
                 (group_data['Название'], group_data.get('Самообразование'), group_data.get('Разговоры о важном', 0))
@@ -128,7 +112,6 @@ class DBOperations:
 
             group_id = cursor.lastrowid
 
-            # Вставляем подгруппы
             for subgroup in subgroups:
                 cursor.execute(
                     "INSERT INTO Подгруппы (ГруппаID, Название) VALUES (?, ?)",
@@ -145,12 +128,10 @@ class DBOperations:
             conn.close()
 
     def delete_group_with_subgroups(self, group_name: str, subgroup_name: str) -> bool:
-        """Удаление группы или подгруппы"""
         conn = self.db._get_connection()
         cursor = conn.cursor()
 
         try:
-            # Находим ID группы
             cursor.execute("SELECT ID FROM Группы WHERE Название = ?", (group_name,))
             group_result = cursor.fetchone()
 
@@ -159,14 +140,11 @@ class DBOperations:
 
             group_id = group_result[0]
 
-            # Удаляем указанную подгруппу
             cursor.execute("DELETE FROM Подгруппы WHERE ГруппаID = ? AND Название = ?", (group_id, subgroup_name))
 
-            # Проверяем, остались ли подгруппы
             cursor.execute("SELECT COUNT(*) FROM Подгруппы WHERE ГруппаID = ?", (group_id,))
             remaining_subgroups = cursor.fetchone()[0]
 
-            # Если подгрупп не осталось, удаляем группу
             if remaining_subgroups == 0:
                 cursor.execute("DELETE FROM Группы WHERE ID = ?", (group_id,))
 
@@ -180,22 +158,18 @@ class DBOperations:
             conn.close()
 
     def update_group_with_subgroups(self, group_id: int, group_data: Dict[str, Any], subgroups: List[str]) -> bool:
-        """Обновление группы с подгруппами"""
         conn = self.db._get_connection()
         cursor = conn.cursor()
 
         try:
-            # Обновляем данные группы
             cursor.execute(
                 "UPDATE Группы SET Название = ?, Самообразование = ?, [Разговоры о важном] = ? WHERE ID = ?",
                 (group_data['Название'], group_data.get('Самообразование'),
                  group_data.get('Разговоры о важном', 0), group_id)
             )
 
-            # Удаляем старые подгруппы
             cursor.execute("DELETE FROM Подгруппы WHERE ГруппаID = ?", (group_id,))
 
-            # Добавляем новые подгруппы
             for subgroup in subgroups:
                 cursor.execute(
                     "INSERT INTO Подгруппы (ГруппаID, Название) VALUES (?, ?)",
@@ -212,7 +186,6 @@ class DBOperations:
             conn.close()
 
     def get_modules(self) -> List[Dict[str, Any]]:
-        """Получение всех модулей"""
         try:
             return self.db.execute_query("SELECT Код, Название FROM Модули ORDER BY Код")
         except Exception as e:
@@ -220,7 +193,6 @@ class DBOperations:
             return []
 
     def insert_module(self, code: str, name: str) -> bool:
-        """Добавление модуля"""
         try:
             return self.db.execute_command(
                 "INSERT INTO Модули (Код, Название) VALUES (?, ?)",
@@ -231,7 +203,6 @@ class DBOperations:
             return False
 
     def check_subject_exists(self, name: str, module: str) -> bool:
-        """Проверка существования предмета"""
         try:
             result = self.db.execute_query(
                 "SELECT COUNT(*) as count FROM Предметы WHERE Название = ? AND Модуль = ?",
@@ -243,7 +214,6 @@ class DBOperations:
             return False
 
     def check_module_exists(self, code: str) -> bool:
-        """Проверка существования модуля"""
         try:
             result = self.db.execute_query(
                 "SELECT COUNT(*) as count FROM Модули WHERE Код = ?",
@@ -255,7 +225,6 @@ class DBOperations:
             return False
 
     def get_subjects_with_module_names(self) -> List[Dict[str, Any]]:
-        """Получение предметов с названиями модулей"""
         try:
             query = """
             SELECT 
@@ -273,7 +242,6 @@ class DBOperations:
             return []
 
     def get_classrooms(self) -> List[Dict[str, Any]]:
-        """Получение всех кабинетов с названиями территорий"""
         try:
             query = """
             SELECT к.ID, к.Номер, т.Название as Территория 
@@ -287,12 +255,10 @@ class DBOperations:
             return []
 
     def insert_subject_with_classrooms(self, subject_data: Dict[str, Any], classroom_ids: List[int]) -> bool:
-        """Добавление предмета с привязкой к кабинетам"""
         conn = self.db._get_connection()
         cursor = conn.cursor()
 
         try:
-            # Добавляем предмет
             cursor.execute(
                 "INSERT INTO Предметы (Название, Модуль) VALUES (?, ?)",
                 (subject_data['Название'], subject_data['Модуль'])
@@ -300,7 +266,6 @@ class DBOperations:
 
             subject_id = cursor.lastrowid
 
-            # Привязываем кабинеты
             for classroom_id in classroom_ids:
                 cursor.execute(
                     "INSERT INTO Предмет_Кабинет (ПредметID, КабинетID) VALUES (?, ?)",
@@ -317,7 +282,6 @@ class DBOperations:
             conn.close()
 
     def get_territories(self) -> List[Dict[str, Any]]:
-        """Получение всех территорий"""
         try:
             return self.db.execute_query("SELECT ID, Название FROM Территории ORDER BY Название")
         except Exception as e:
@@ -325,7 +289,6 @@ class DBOperations:
             return []
 
     def get_classrooms_by_territory(self, territory_id: int) -> List[Dict[str, Any]]:
-        """Получение кабинетов по территории"""
         try:
             return self.db.execute_query(
                 "SELECT ID, Номер FROM Кабинеты WHERE ТерриторияID = ? ORDER BY Номер",
@@ -336,7 +299,6 @@ class DBOperations:
             return []
 
     def get_classrooms_by_subject(self, subject_id: int) -> List[Dict[str, Any]]:
-        """Получение кабинетов по предмету"""
         try:
             return self.db.execute_query(
                 """SELECT к.ID, к.Номер, т.Название as Территория 
@@ -352,21 +314,17 @@ class DBOperations:
 
     def update_subject_with_classrooms(self, subject_id: int, subject_data: Dict[str, Any],
                                        classroom_ids: List[int]) -> bool:
-        """Обновление предмета с кабинетами"""
         conn = self.db._get_connection()
         cursor = conn.cursor()
 
         try:
-            # Обновляем предмет
             cursor.execute(
                 "UPDATE Предметы SET Название = ?, Модуль = ? WHERE ID = ?",
                 (subject_data['Название'], subject_data['Модуль'], subject_id)
             )
 
-            # Удаляем старые привязки к кабинетам
             cursor.execute("DELETE FROM Предмет_Кабинет WHERE ПредметID = ?", (subject_id,))
 
-            # Добавляем новые привязки
             for classroom_id in classroom_ids:
                 cursor.execute(
                     "INSERT INTO Предмет_Кабинет (ПредметID, КабинетID) VALUES (?, ?)",
@@ -383,7 +341,6 @@ class DBOperations:
             conn.close()
 
     def get_classroom_by_id(self, classroom_id: int) -> Optional[Dict[str, Any]]:
-        """Получение кабинета по ID"""
         try:
             result = self.db.execute_query(
                 "SELECT ID, Номер, ТерриторияID FROM Кабинеты WHERE ID = ?",
@@ -395,7 +352,6 @@ class DBOperations:
             return None
 
     def check_classroom_exists(self, number: str, territory_id: int) -> bool:
-        """Проверка существования кабинета"""
         try:
             result = self.db.execute_query(
                 "SELECT COUNT(*) as count FROM Кабинеты WHERE Номер = ? AND ТерриторияID = ?",
@@ -407,7 +363,6 @@ class DBOperations:
             return False
 
     def get_classrooms_with_territory_names(self) -> List[Dict[str, Any]]:
-        """Получение кабинетов с названиями территорий и вместимостью"""
         try:
             query = """
             SELECT 
@@ -425,12 +380,10 @@ class DBOperations:
             return []
 
     def delete_territory_with_classrooms(self, territory_id: int) -> bool:
-        """Удаление территории с кабинетами"""
         conn = self.db._get_connection()
         cursor = conn.cursor()
 
         try:
-            # Удаляем привязки предметов к кабинетам этой территории
             cursor.execute("""
                 DELETE FROM Предмет_Кабинет 
                 WHERE КабинетID IN (
@@ -438,10 +391,8 @@ class DBOperations:
                 )
             """, (territory_id,))
 
-            # Удаляем кабинеты территории
             cursor.execute("DELETE FROM Кабинеты WHERE ТерриторияID = ?", (territory_id,))
 
-            # Удаляем территорию
             cursor.execute("DELETE FROM Территории WHERE ID = ?", (territory_id,))
 
             conn.commit()
@@ -454,7 +405,6 @@ class DBOperations:
             conn.close()
 
     def check_territory_exists(self, name: str) -> bool:
-        """Проверка существования территории"""
         try:
             result = self.db.execute_query(
                 "SELECT COUNT(*) as count FROM Территории WHERE Название = ?",
@@ -466,7 +416,6 @@ class DBOperations:
             return False
 
     def check_teacher_exists(self, name: str) -> bool:
-        """Проверка существования преподавателя"""
         try:
             result = self.db.execute_query(
                 "SELECT COUNT(*) as count FROM Преподаватели WHERE ФИО = ?",
@@ -477,10 +426,8 @@ class DBOperations:
             print(f"Ошибка при проверке существования преподавателя: {e}")
             return False
 
-    # Новые методы для улучшенной валидации
 
     def check_group_exists(self, group_name: str, exclude_id: Optional[int] = None) -> bool:
-        """Проверка существования группы (с исключением ID)"""
         try:
             groups = self.get_groups_with_subgroups()
             for group in groups:
@@ -494,7 +441,6 @@ class DBOperations:
             return False
 
     def check_territory_exists_by_id(self, territory_id: int, name: str) -> bool:
-        """Проверка существования территории с другим ID"""
         try:
             territories = self.get_territories()
             for territory in territories:
@@ -506,7 +452,6 @@ class DBOperations:
             return False
 
     def check_teacher_exists_by_id(self, teacher_id: int, name: str) -> bool:
-        """Проверка существования преподавателя с другим ID"""
         try:
             teachers = self.get_table_data("Преподаватели")
             for teacher in teachers:
@@ -518,7 +463,6 @@ class DBOperations:
             return False
 
     def check_module_exists_by_code(self, exclude_code: str, code: str) -> bool:
-        """Проверка существования модуля с другим кодом"""
         try:
             modules = self.get_modules()
             for module in modules:
@@ -530,7 +474,6 @@ class DBOperations:
             return False
 
     def get_territory_id_by_name(self, territory_name: str) -> Optional[int]:
-        """Получение ID территории по названию"""
         try:
             territories = self.get_territories()
             for territory in territories:
@@ -542,16 +485,139 @@ class DBOperations:
             return None
 
     def get_teachers_with_preferences(self) -> List[Dict[str, Any]]:
-        """Получение преподавателей с предпочтениями"""
+        """Получение преподавателей с предпочтениями и территориями"""
         try:
-            teachers = self.db.execute_query("SELECT * FROM Преподаватели ORDER BY ФИО")
-            # Форматируем данные для отображения
+            # Сначала получаем всех преподавателей
+            query = """
+            SELECT ID, ФИО, 
+                   CASE WHEN Совместитель = 1 THEN 'Да' ELSE 'Нет' END as Совместитель,
+                   COALESCE([Дни занятий], 'Любые') as [Дни занятий]
+            FROM Преподаватели 
+            ORDER BY ФИО
+            """
+            teachers = self.db.execute_query(query)
+
+            # Для каждого преподавателя получаем территории
             for teacher in teachers:
-                if teacher.get('Дни'):
-                    teacher['Дни'] = teacher['Дни'].replace(',', ', ')
-                if teacher.get('Уроки'):
-                    teacher['Уроки'] = teacher['Уроки'].replace(',', ', ')
+                teacher_id = teacher['ID']
+                territories = self.get_teacher_territories(teacher_id)
+
+                # Форматируем список территорий
+                if territories:
+                    territory_names = [t['Название'] for t in territories]
+                    teacher['Территория'] = ', '.join(territory_names)
+                else:
+                    teacher['Территория'] = 'Не указана'
+
             return teachers
         except Exception as e:
             print(f"Ошибка при получении преподавателей: {e}")
             return []
+
+    def insert_teacher(self, teacher_data: Dict[str, Any]) -> bool:
+        try:
+            return self.db.execute_command(
+                "INSERT INTO Преподаватели (ФИО, Совместитель, [Дни занятий]) VALUES (?, ?, ?)",
+                (
+                    teacher_data['ФИО'],
+                    1 if teacher_data.get('Совместитель', False) else 0,
+                    teacher_data.get('Дни занятий')
+                )
+            )
+        except Exception as e:
+            print(f"Ошибка при добавлении преподавателя: {e}")
+            return False
+
+    def update_teacher(self, teacher_id: int, teacher_data: Dict[str, Any]) -> bool:
+        try:
+            return self.db.execute_command(
+                "UPDATE Преподаватели SET ФИО = ?, Совместитель = ?, [Дни занятий] = ? WHERE ID = ?",
+                (
+                    teacher_data['ФИО'],
+                    1 if teacher_data.get('Совместитель', False) else 0,
+                    teacher_data.get('[Дни занятий]'),
+                    teacher_id
+                )
+            )
+        except Exception as e:
+            print(f"Ошибка при обновлении преподавателя: {e}")
+            return False
+
+    def get_teacher_territories(self, teacher_id: int) -> List[Dict[str, Any]]:
+        try:
+            query = """
+            SELECT т.ID, т.Название
+            FROM Преподаватель_Территория пт
+            JOIN Территории т ON пт.ТерриторияID = т.ID
+            WHERE пт.ПреподавательID = ?
+            ORDER BY т.Название
+            """
+            return self.db.execute_query(query, (teacher_id,))
+        except Exception as e:
+            print(f"Ошибка при получении территорий преподавателя: {e}")
+            return []
+
+    def insert_teacher_with_territories(self, teacher_data: Dict[str, Any], territory_ids: List[int]) -> bool:
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Добавляем преподавателя
+            cursor.execute(
+                "INSERT INTO Преподаватели (ФИО, Совместитель, [Дни занятий]) VALUES (?, ?, ?)",
+                (
+                    teacher_data['ФИО'],
+                    1 if teacher_data.get('Совместитель', False) else 0,
+                    teacher_data.get('[Дни занятий]')
+                )
+            )
+
+            teacher_id = cursor.lastrowid
+
+            for territory_id in territory_ids:
+                cursor.execute(
+                    "INSERT INTO Преподаватель_Территория (ПреподавательID, ТерриторияID) VALUES (?, ?)",
+                    (teacher_id, territory_id)
+                )
+
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Ошибка при добавлении преподавателя с территориями: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    def update_teacher_with_territories(self, teacher_id: int, teacher_data: Dict[str, Any],
+                                        territory_ids: List[int]) -> bool:
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                "UPDATE Преподаватели SET ФИО = ?, Совместитель = ?, [Дни занятий] = ? WHERE ID = ?",
+                (
+                    teacher_data['ФИО'],
+                    1 if teacher_data.get('Совместитель', False) else 0,
+                    teacher_data.get('[Дни занятий]'),
+                    teacher_id
+                )
+            )
+
+            cursor.execute("DELETE FROM Преподаватель_Территория WHERE ПреподавательID = ?", (teacher_id,))
+
+            for territory_id in territory_ids:
+                cursor.execute(
+                    "INSERT INTO Преподаватель_Территория (ПреподавательID, ТерриторияID) VALUES (?, ?)",
+                    (teacher_id, territory_id)
+                )
+
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Ошибка при обновлении преподавателя с территориями: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
