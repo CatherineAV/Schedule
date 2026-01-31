@@ -205,12 +205,12 @@ class DBOperations:
     def check_subject_exists(self, name: str, module: str) -> bool:
         try:
             result = self.db.execute_query(
-                "SELECT COUNT(*) as count FROM Предметы WHERE Название = ? AND Модуль = ?",
+                "SELECT COUNT(*) as count FROM Дисциплины WHERE Название = ? AND Модуль = ?",
                 (name, module)
             )
             return result[0]['count'] > 0 if result else False
         except Exception as e:
-            print(f"Ошибка при проверке существования предмета: {e}")
+            print(f"Ошибка при проверке существования дисциплины: {e}")
             return False
 
     def check_module_exists(self, code: str) -> bool:
@@ -229,16 +229,16 @@ class DBOperations:
             query = """
             SELECT 
                 п.ID, 
-                п.Название as Предмет, 
+                п.Название as Дисциплина, 
                 п.Модуль as [Код модуля],
                 м.Название as [Название модуля]
-            FROM Предметы п
+            FROM Дисциплины п
             LEFT JOIN Модули м ON п.Модуль = м.Код
             ORDER BY п.ID
             """
             return self.db.execute_query(query)
         except Exception as e:
-            print(f"Ошибка при получении предметов с модулями: {e}")
+            print(f"Ошибка при получении дисциплин с модулями: {e}")
             return []
 
     def get_classrooms(self) -> List[Dict[str, Any]]:
@@ -260,7 +260,7 @@ class DBOperations:
 
         try:
             cursor.execute(
-                "INSERT INTO Предметы (Название, Модуль) VALUES (?, ?)",
+                "INSERT INTO Дисциплины (Название, Модуль) VALUES (?, ?)",
                 (subject_data['Название'], subject_data['Модуль'])
             )
 
@@ -268,14 +268,14 @@ class DBOperations:
 
             for classroom_id in classroom_ids:
                 cursor.execute(
-                    "INSERT INTO Предмет_Кабинет (ПредметID, КабинетID) VALUES (?, ?)",
+                    "INSERT INTO Дисциплина_Кабинет (ДисциплинаID, КабинетID) VALUES (?, ?)",
                     (subject_id, classroom_id)
                 )
 
             conn.commit()
             return True
         except sqlite3.Error as e:
-            print(f"Ошибка при добавлении предмета: {e}")
+            print(f"Ошибка при добавлении дисциплины: {e}")
             conn.rollback()
             return False
         finally:
@@ -303,13 +303,13 @@ class DBOperations:
             return self.db.execute_query(
                 """SELECT к.ID, к.Номер, т.Название as Территория 
                 FROM Кабинеты к
-                JOIN Предмет_Кабинет пк ON к.ID = пк.КабинетID
+                JOIN Дисциплина_Кабинет пк ON к.ID = пк.КабинетID
                 JOIN Территории т ON к.ТерриторияID = т.ID
-                WHERE пк.ПредметID = ?""",
+                WHERE пк.ДисциплинаID = ?""",
                 (subject_id,)
             )
         except Exception as e:
-            print(f"Ошибка при получении кабинетов по предмету: {e}")
+            print(f"Ошибка при получении кабинетов по дисциплинам: {e}")
             return []
 
     def update_subject_with_classrooms(self, subject_id: int, subject_data: Dict[str, Any],
@@ -319,22 +319,22 @@ class DBOperations:
 
         try:
             cursor.execute(
-                "UPDATE Предметы SET Название = ?, Модуль = ? WHERE ID = ?",
+                "UPDATE Дисциплины SET Название = ?, Модуль = ? WHERE ID = ?",
                 (subject_data['Название'], subject_data['Модуль'], subject_id)
             )
 
-            cursor.execute("DELETE FROM Предмет_Кабинет WHERE ПредметID = ?", (subject_id,))
+            cursor.execute("DELETE FROM Дисциплина_Кабинет WHERE ДисциплинаID = ?", (subject_id,))
 
             for classroom_id in classroom_ids:
                 cursor.execute(
-                    "INSERT INTO Предмет_Кабинет (ПредметID, КабинетID) VALUES (?, ?)",
+                    "INSERT INTO Дисциплина_Кабинет (ДисциплинаID, КабинетID) VALUES (?, ?)",
                     (subject_id, classroom_id)
                 )
 
             conn.commit()
             return True
         except sqlite3.Error as e:
-            print(f"Ошибка при обновлении предмета: {e}")
+            print(f"Ошибка при обновлении дисциплины: {e}")
             conn.rollback()
             return False
         finally:
@@ -385,7 +385,7 @@ class DBOperations:
 
         try:
             cursor.execute("""
-                DELETE FROM Предмет_Кабинет 
+                DELETE FROM Дисциплина_Кабинет 
                 WHERE КабинетID IN (
                     SELECT ID FROM Кабинеты WHERE ТерриторияID = ?
                 )
@@ -485,9 +485,8 @@ class DBOperations:
             return None
 
     def get_teachers_with_preferences(self) -> List[Dict[str, Any]]:
-        """Получение преподавателей с предпочтениями и территориями"""
+        """Получение преподавателей с предпочтениями"""
         try:
-            # Сначала получаем всех преподавателей
             query = """
             SELECT ID, ФИО, 
                    CASE WHEN Совместитель = 1 THEN 'Да' ELSE 'Нет' END as Совместитель,
@@ -500,11 +499,20 @@ class DBOperations:
             # Для каждого преподавателя получаем территории
             for teacher in teachers:
                 teacher_id = teacher['ID']
-                territories = self.get_teacher_territories(teacher_id)
 
-                # Форматируем список территорий
-                if territories:
-                    territory_names = [t['Название'] for t in territories]
+                # Получаем территории преподавателя (максимум 2)
+                territory_query = """
+                SELECT т.Название
+                FROM Преподаватель_Территория пт
+                JOIN Территории т ON пт.ТерриторияID = т.ID
+                WHERE пт.ПреподавательID = ?
+                ORDER BY пт.ID
+                LIMIT 2
+                """
+                territory_result = self.db.execute_query(territory_query, (teacher_id,))
+
+                if territory_result:
+                    territory_names = [t['Название'] for t in territory_result]
                     teacher['Территория'] = ', '.join(territory_names)
                 else:
                     teacher['Территория'] = 'Не указана'

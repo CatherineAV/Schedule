@@ -57,7 +57,7 @@ class Database:
             FOREIGN KEY (ТерриторияID) REFERENCES Территории(ID) ON DELETE CASCADE
         );
 
-        CREATE TABLE IF NOT EXISTS Предметы (
+        CREATE TABLE IF NOT EXISTS Дисциплины (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             Название TEXT NOT NULL,
             Модуль TEXT NOT NULL,
@@ -79,31 +79,31 @@ class Database:
             FOREIGN KEY (ТерриторияID) REFERENCES Территории(ID)
         );
 
-        CREATE TABLE IF NOT EXISTS Преподаватель_Предмет (
+        CREATE TABLE IF NOT EXISTS Преподаватель_ПДисциплина (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ПреподавательID INTEGER NOT NULL,
-            ПредметID INTEGER NOT NULL,
+            ДисциплинаID INTEGER NOT NULL,
             FOREIGN KEY (ПреподавательID) REFERENCES Преподаватели(ID),
-            FOREIGN KEY (ПредметID) REFERENCES Предметы(ID)
+            FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID)
         );
 
-        CREATE TABLE IF NOT EXISTS Предмет_Кабинет (
+        CREATE TABLE IF NOT EXISTS Дисциплина_Кабинет (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            ПредметID INTEGER NOT NULL,
+            ДисциплинаID INTEGER NOT NULL,
             КабинетID INTEGER NOT NULL,
-            FOREIGN KEY (ПредметID) REFERENCES Предметы(ID) ON DELETE CASCADE,
+            FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID) ON DELETE CASCADE,
             FOREIGN KEY (КабинетID) REFERENCES Кабинеты(ID) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS Нагрузка (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ПреподавательID INTEGER NOT NULL,
-            ПредметID INTEGER NOT NULL,
+            ДисциплинаID INTEGER NOT NULL,
             ПодгруппаID INTEGER,
             ПотокID INTEGER,
             Часы INTEGER NOT NULL,
             FOREIGN KEY (ПреподавательID) REFERENCES Преподаватели(ID),
-            FOREIGN KEY (ПредметID) REFERENCES Предметы(ID),
+            FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID),
             FOREIGN KEY (ПодгруппаID) REFERENCES Подгруппы(ID),
             FOREIGN KEY (ПотокID) REFERENCES Потоки(ID)
         );

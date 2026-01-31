@@ -81,10 +81,10 @@ class DataMenu(BasePage):
                 on_click=lambda e: self._on_section_click("Группы")
             ),
             ft.ElevatedButton(
-                "Предметы",
+                "Дисциплины",
                 icon=ft.Icons.CLASS_,
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
-                on_click=lambda e: self._on_section_click("Предметы")
+                on_click=lambda e: self._on_section_click("Дисциплины")
             ),
             ft.ElevatedButton(
                 "Преподаватели",
@@ -126,9 +126,9 @@ class DataPane(BasePage):
         if section_name == "Группы":
             data = self.db_ops.get_groups_with_subgroups()
             columns = ["ID", "Группа", "Подгруппа", "Самообразование", "Разговоры о важном"]
-        elif section_name == "Предметы":
+        elif section_name == "Дисциплины":
             data = self.db_ops.get_subjects_with_module_names()
-            columns = ["ID", "Предмет", "Код модуля", "Название модуля"]
+            columns = ["ID", "Дисциплина", "Код модуля", "Название модуля"]
         elif section_name == "Преподаватели":
             data = self.db_ops.get_teachers_with_preferences()
             columns = ["ID", "ФИО", "Совместитель", "Дни занятий", "Территория"]
@@ -229,7 +229,7 @@ class DataPane(BasePage):
 
             if section_name == "Группы":
                 self._render_edit_group_form(record)
-            elif section_name == "Предметы":
+            elif section_name == "Дисциплины":
                 self._render_edit_subject_form(record)
             elif section_name == "Преподаватели":
                 self._render_edit_teacher_form(record)
@@ -319,7 +319,7 @@ class DataPane(BasePage):
     def _render_add_form(self, table_name: str, columns: List[str]):
         if table_name == "Группы":
             self._render_group_add_form()
-        elif table_name == "Предметы":
+        elif table_name == "Дисциплины":
             self._render_add_subject_form()
         elif table_name == "Преподаватели":
             self._render_teacher_add_form()
@@ -464,7 +464,7 @@ class DataPane(BasePage):
 
                     field = ft.Dropdown(
                         label="Территория",
-                        width=300,
+                        width=600,
                         border_color=PALETTE[3],
                         bgcolor=ft.Colors.BLUE_GREY,
                         color=PALETTE[2],
@@ -497,7 +497,7 @@ class DataPane(BasePage):
                 elif column == "Самообразование":
                     field = ft.Dropdown(
                         label=column,
-                        width=200,
+                        width=300,
                         border_color=PALETTE[3],
                         bgcolor=ft.Colors.BLUE_GREY,
                         color=PALETTE[2],
@@ -858,13 +858,13 @@ class DataPane(BasePage):
         def on_form_submit(subject_data, classroom_ids):
             success = self.db_ops.insert_subject_with_classrooms(subject_data, classroom_ids)
             if success:
-                self.toast.show("Предмет успешно добавлен!", success=True)
-                self.render("Предметы")
+                self.toast.show("Дисциплина успешно добавлен!", success=True)
+                self.render("Дисциплины")
             else:
-                self.toast.show("Ошибка при добавлении предмета!", success=False)
+                self.toast.show("Ошибка при добавлении дисциплины!", success=False)
 
         def on_form_cancel(e):
-            self.render("Предметы")
+            self.render("Дисциплины")
 
         from ui.forms import SubjectForm
         subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
@@ -882,19 +882,19 @@ class DataPane(BasePage):
         def on_form_submit(subject_data, classroom_ids):
             success = self.db_ops.update_subject_with_classrooms(record['ID'], subject_data, classroom_ids)
             if success:
-                self.toast.show("Предмет успешно обновлен!", success=True)
-                self.render("Предметы")
+                self.toast.show("Дисциплина успешно обновлен!", success=True)
+                self.render("Дисциплина")
             else:
-                self.toast.show("Ошибка при обновлении предмета!", success=False)
+                self.toast.show("Ошибка при обновлении дисциплины!", success=False)
 
         def on_form_cancel(e):
-            self.render("Предметы")
+            self.render("Дисциплины")
 
         current_classrooms = self.db_ops.get_classrooms_by_subject(record['ID'])
         classroom_ids = [classroom['ID'] for classroom in current_classrooms]
 
         subject_data = {
-            'Название': record['Предмет'],
+            'Название': record['Дисциплина'],
             'Модуль': record['Код модуля']
         }
 

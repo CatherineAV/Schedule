@@ -37,7 +37,7 @@ class GroupForm:
 
         self.self_education_dropdown = ft.Dropdown(
             label="День самообразования",
-            width=210,
+            width=300,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
             color=PALETTE[2],
@@ -251,7 +251,7 @@ class SubjectForm:
         self.territories = self.db_operations.get_territories()
 
         self.subject_name_field = ft.TextField(
-            label="Название предмета",
+            label="Название дисциплины",
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=subject_data['Название'] if subject_data and edit_mode else "",
@@ -262,7 +262,7 @@ class SubjectForm:
 
         self.module_dropdown = ft.Dropdown(
             label="Модуль",
-            width=300,
+            width=600,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
             color=PALETTE[2],
@@ -294,7 +294,7 @@ class SubjectForm:
 
         self.territory_dropdown = ft.Dropdown(
             label="Территория",
-            width=300,
+            width=600,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
             color=PALETTE[2],
@@ -445,7 +445,7 @@ class SubjectForm:
             self.page.update()
 
     def build(self) -> ft.Column:
-        title = "Редактировать предмет" if self.edit_mode else "Добавить предмет"
+        title = "Редактировать дисциплину" if self.edit_mode else "Добавить дисциплину"
 
         scrollable_content = ft.Column([
             ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
@@ -464,7 +464,7 @@ class SubjectForm:
 
         scrollable_content.controls.extend([
             ft.Divider(height=20, color=PALETTE[1]),
-            ft.Text("Расположение предмета", size=16, weight="bold", color=PALETTE[2]),
+            ft.Text("Территория", size=16, weight="bold", color=PALETTE[2]),
             self.territory_dropdown,
             self.no_territories_message,
             self.no_classrooms_message,
@@ -505,7 +505,7 @@ class SubjectForm:
     def _on_form_submit(self, e):
         subject_name = self.subject_name_field.value.strip()
 
-        if error := Validator.validate_required(subject_name, "Название предмета"):
+        if error := Validator.validate_required(subject_name, "Название дисциплины"):
             self.toast.show(error, success=False)
             return
 
@@ -540,11 +540,11 @@ class SubjectForm:
             if (subject_name.upper() != self.original_subject_name.upper() or
                     module != self.original_module):
                 if self.db_operations.check_subject_exists(subject_name, module):
-                    self.toast.show(f"Предмет '{subject_name}' с модулем '{module}' уже существует!", success=False)
+                    self.toast.show(f"Дисциплина '{subject_name}' с модулем '{module}' уже существует!", success=False)
                     return
         else:
             if self.db_operations.check_subject_exists(subject_name, module):
-                self.toast.show(f"Предмет '{subject_name}' с модулем '{module}' уже существует!", success=False)
+                self.toast.show(f"Дисциплина '{subject_name}' с модулем '{module}' уже существует!", success=False)
                 return
 
         subject_data = {
@@ -583,7 +583,7 @@ class ClassroomForm:
 
         self.territory_dropdown = ft.Dropdown(
             label="Территория",
-            width=500,
+            width=600,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
             color=PALETTE[2],
@@ -723,6 +723,66 @@ class TeacherForm:
             label_style=ft.TextStyle(color=PALETTE[2]),
         )
 
+        self.all_territories = self.db_operations.get_territories()
+
+        # Задаем начальные значения для выпадающих списков
+        territory1_value = str(saved_territories[0]) if len(saved_territories) > 0 else None
+        territory2_value = str(saved_territories[1]) if len(saved_territories) > 1 else None
+
+        # Первый выпадающий список - все территории
+        territory_options1 = [
+            ft.dropdown.Option(str(t['ID']), t['Название'])
+            for t in self.all_territories
+        ]
+
+        # Второй выпадающий список - все территории КРОМЕ выбранной в первом
+        territory_options2 = []
+        if territory1_value:
+            # Исключаем выбранную основную территорию
+            territory_options2 = [
+                ft.dropdown.Option(str(t['ID']), t['Название'])
+                for t in self.all_territories if str(t['ID']) != territory1_value
+            ]
+        else:
+            # Если основная территория не выбрана, показываем все
+            territory_options2 = [
+                ft.dropdown.Option(str(t['ID']), t['Название'])
+                for t in self.all_territories
+            ]
+
+        # Первый выпадающий список
+        self.territory_dropdown1 = ft.Dropdown(
+            label="Основная территория",
+            width=600,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=territory_options1,
+            value=territory1_value,
+            on_change=self._on_territory1_change
+        )
+
+        # Второй выпадающий список
+        self.territory_dropdown2 = ft.Dropdown(
+            label="Дополнительная территория (необязательно)",
+            width=600,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=territory_options2,
+            value=territory2_value,
+            on_change=self._on_territory2_change
+        )
+
+        # Сообщение если нет территорий
+        self.no_territories_message = ft.Text(
+            "Сначала создайте территории в соответствующем разделе",
+            size=14,
+            color=ft.Colors.ORANGE_700,
+            visible=len(self.all_territories) == 0
+        )
+
+        # Чекбоксы для дней недели
         self.day_checkboxes = {}
         self.selected_days = saved_days.copy()
 
@@ -762,35 +822,6 @@ class TeacherForm:
             spacing=10
         )
 
-        self.territories = self.db_operations.get_territories()
-        self.selected_territories = saved_territories.copy()
-
-        self.territory_checkbox_refs = {}
-        self.territory_listview = ft.ListView(
-            expand=False,
-            height=150,
-            spacing=5,
-            padding=10,
-            visible=False
-        )
-
-        self.territory_container = ft.Container(
-            content=self.territory_listview,
-            border=ft.border.all(1, PALETTE[1]),
-            border_radius=5,
-            visible=False
-        )
-
-        self.no_territories_message = ft.Text(
-            "Сначала создайте территории в соответствующем разделе",
-            size=14,
-            color=ft.Colors.ORANGE_700,
-            visible=len(self.territories) == 0
-        )
-
-        if self.territories:
-            self._load_territories()
-
         self.info_note = ft.Text(
             "Если дни не выбраны, преподаватель может вести занятия в любые дни",
             size=12,
@@ -798,49 +829,36 @@ class TeacherForm:
             italic=True
         )
 
-    def _load_territories(self):
-        if not self.territories:
-            return
+    def _on_territory1_change(self, e):
+        """Обработка изменения основной территории"""
+        # Обновляем список для дополнительной территории
+        selected_territory_id = self.territory_dropdown1.value
 
-        self.territory_listview.controls.clear()
-        self.territory_checkbox_refs.clear()
+        if selected_territory_id:
+            # Исключаем выбранную основную территорию
+            new_options = [
+                ft.dropdown.Option(str(t['ID']), t['Название'])
+                for t in self.all_territories if str(t['ID']) != selected_territory_id
+            ]
+            self.territory_dropdown2.options = new_options
 
-        items_per_row = 4
-
-        for i in range(0, len(self.territories), items_per_row):
-            row_territories = self.territories[i:i + items_per_row]
-
-            row_controls = []
-            for territory in row_territories:
-                is_checked = territory['ID'] in self.selected_territories
-                checkbox = ft.Checkbox(
-                    label=territory['Название'],
-                    value=is_checked,
-                    label_style=ft.TextStyle(color=PALETTE[2]),
-                    on_change=lambda e, territory_id=territory['ID']: self._on_territory_change(territory_id,
-                                                                                                e.control.value)
-                )
-                self.territory_checkbox_refs[territory['ID']] = checkbox
-                row_controls.append(checkbox)
-
-            row = ft.Row(
-                controls=row_controls,
-                spacing=10,
-                wrap=False
-            )
-            self.territory_listview.controls.append(row)
-
-        self.territory_listview.visible = True
-        self.territory_container.visible = True
-        self.no_territories_message.visible = False
-
-    def _on_territory_change(self, territory_id: int, is_checked: bool):
-        if is_checked:
-            if territory_id not in self.selected_territories:
-                self.selected_territories.append(territory_id)
+            # Если в дополнительной была выбрана та же территория - сбрасываем
+            if self.territory_dropdown2.value == selected_territory_id:
+                self.territory_dropdown2.value = None
         else:
-            if territory_id in self.selected_territories:
-                self.selected_territories.remove(territory_id)
+            # Если основная территория не выбрана - показываем все
+            self.territory_dropdown2.options = [
+                ft.dropdown.Option(str(t['ID']), t['Название'])
+                for t in self.all_territories
+            ]
+
+        if hasattr(self, 'page'):
+            self.page.update()
+
+    def _on_territory2_change(self, e):
+        """Обработка изменения дополнительной территории"""
+        # Здесь можно добавить дополнительную логику при необходимости
+        pass
 
     def _on_day_change(self, day_code: str, is_checked: bool):
         if is_checked:
@@ -860,7 +878,8 @@ class TeacherForm:
             ft.Divider(height=20, color=PALETTE[1]),
             ft.Text("Территории", size=16, weight="bold", color=PALETTE[2]),
             self.no_territories_message,
-            self.territory_container,
+            self.territory_dropdown1,
+            self.territory_dropdown2,
             ft.Divider(height=20, color=PALETTE[1]),
             ft.Text("Дни занятий (необязательно)", size=16, weight="bold", color=PALETTE[2]),
             self.info_note,
@@ -905,9 +924,19 @@ class TeacherForm:
             self.toast.show(error, success=False)
             return
 
-        if len(self.selected_territories) == 0:
-            self.toast.show("Выберите хотя бы одну территорию!", success=False)
+        territory1 = self.territory_dropdown1.value
+
+        if not territory1:
+            self.toast.show("Выберите основную территорию!", success=False)
             return
+
+        territory2 = self.territory_dropdown2.value
+
+        territory_ids = []
+        if territory1:
+            territory_ids.append(int(territory1))
+        if territory2:
+            territory_ids.append(int(territory2))
 
         if self.edit_mode:
             if full_name.upper() != self.original_teacher_name.upper():
@@ -925,7 +954,7 @@ class TeacherForm:
             'ФИО': full_name,
             'Совместитель': is_part_timer,
             '[Дни занятий]': days_str,
-            'Территории': self.selected_territories
+            'Территории': territory_ids
         }
 
         self.on_submit(teacher_data)
