@@ -32,7 +32,6 @@ def main(page: ft.Page):
     )
 
     main_menu = MainMenu(menu_column, content, page, db_ops, toast)
-
     main_menu.render()
 
     page.add(
