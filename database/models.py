@@ -6,6 +6,7 @@ from typing import Optional, List
 class Group:
     id: Optional[int] = None
     name: str = ""
+    subgroup: str = "Нет"
     self_education: Optional[str] = None
     important_talks: bool = False
 
