@@ -1,6 +1,7 @@
 import sqlite3
 from typing import List, Dict, Any, Optional
 
+
 class Database:
     def __init__(self, db_name: str = "schedule.db"):
         self.db_name = db_name
@@ -19,36 +20,17 @@ class Database:
         CREATE TABLE IF NOT EXISTS Группы (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             Название TEXT NOT NULL,
+            Подгруппа TEXT NOT NULL DEFAULT 'Нет',
             Самообразование TEXT,
             [Разговоры о важном] BOOLEAN DEFAULT 0
         );
 
-        CREATE TABLE IF NOT EXISTS Подгруппы (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            ГруппаID INTEGER NOT NULL,
-            Название TEXT NOT NULL,
-            FOREIGN KEY (ГруппаID) REFERENCES Группы(ID)
-        );
-
-        CREATE TABLE IF NOT EXISTS Потоки (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Название TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS СоставПотока (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            ПотокID INTEGER NOT NULL,
-            ПодгруппаID INTEGER NOT NULL,
-            FOREIGN KEY (ПотокID) REFERENCES Потоки(ID),
-            FOREIGN KEY (ПодгруппаID) REFERENCES Подгруппы(ID)
-        );
-
         CREATE TABLE IF NOT EXISTS Территории (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Название TEXT NOT NULL,
-            Цвет TEXT DEFAULT '#FFFFFF'
+        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        Название TEXT NOT NULL,
+        Цвет TEXT DEFAULT '#FFFFFF'
         );
-
+    
         CREATE TABLE IF NOT EXISTS Кабинеты (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             Номер TEXT NOT NULL,
@@ -58,12 +40,12 @@ class Database:
         );
 
         CREATE TABLE IF NOT EXISTS Дисциплины (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Название TEXT NOT NULL,
-            Модуль TEXT NOT NULL,
-            FOREIGN KEY (Модуль) REFERENCES Модули(Код)
+        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        Название TEXT NOT NULL,
+        Модуль TEXT NOT NULL,
+        FOREIGN KEY (Модуль) REFERENCES Модули(Код)
         );
-
+    
         CREATE TABLE IF NOT EXISTS Преподаватели (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ФИО TEXT NOT NULL,
@@ -78,15 +60,15 @@ class Database:
             FOREIGN KEY (ПреподавательID) REFERENCES Преподаватели(ID),
             FOREIGN KEY (ТерриторияID) REFERENCES Территории(ID)
         );
-
-        CREATE TABLE IF NOT EXISTS Преподаватель_ПДисциплина (
+    
+        CREATE TABLE IF NOT EXISTS Преподаватель_Дисциплина (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ПреподавательID INTEGER NOT NULL,
             ДисциплинаID INTEGER NOT NULL,
             FOREIGN KEY (ПреподавательID) REFERENCES Преподаватели(ID),
             FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID)
         );
-
+    
         CREATE TABLE IF NOT EXISTS Дисциплина_Кабинет (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ДисциплинаID INTEGER NOT NULL,
@@ -94,18 +76,16 @@ class Database:
             FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID) ON DELETE CASCADE,
             FOREIGN KEY (КабинетID) REFERENCES Кабинеты(ID) ON DELETE CASCADE
         );
-
+    
         CREATE TABLE IF NOT EXISTS Нагрузка (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
             ПреподавательID INTEGER NOT NULL,
             ДисциплинаID INTEGER NOT NULL,
-            ПодгруппаID INTEGER,
-            ПотокID INTEGER,
+            ГруппаID INTEGER NOT NULL,
             Часы INTEGER NOT NULL,
             FOREIGN KEY (ПреподавательID) REFERENCES Преподаватели(ID),
             FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID),
-            FOREIGN KEY (ПодгруппаID) REFERENCES Подгруппы(ID),
-            FOREIGN KEY (ПотокID) REFERENCES Потоки(ID)
+            FOREIGN KEY (ГруппаID) REFERENCES Группы(ID)
         );
         """)
 
