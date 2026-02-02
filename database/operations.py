@@ -72,9 +72,9 @@ class DBOperations:
     def get_groups(self) -> List[Dict[str, Any]]:
         try:
             query = """
-            SELECT ID, Название, Подгруппа, Самообразование, [Разговоры о важном] 
+            SELECT ID, Группа, Подгруппа, Самообразование, [Разговоры о важном] 
             FROM Группы 
-            ORDER BY Название, Подгруппа
+            ORDER BY Группа, Подгруппа
             """
             return self.db.execute_query(query)
         except Exception as e:
@@ -83,22 +83,19 @@ class DBOperations:
 
     def insert_group(self, group_data: Dict[str, Any]) -> bool:
         try:
-            existing_groups = self.get_groups()
-            group_name = group_data['Название']
+            group_name = group_data['Группа']
             subgroup = group_data.get('Подгруппа', 'Нет')
 
-            for existing in existing_groups:
-                if (existing['Название'].upper() == group_name.upper() and
-                        existing['Подгруппа'].upper() == subgroup.upper()):
-                    return False
+            if self.check_group_exists_any_subgroup(group_name):
+                return False
 
             if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and subgroup == "Нет":
                 return False
 
             return self.db.execute_command(
-                "INSERT INTO Группы (Название, Подгруппа, Самообразование, [Разговоры о важном]) VALUES (?, ?, ?, ?)",
+                "INSERT INTO Группы (Группа, Подгруппа, Самообразование, [Разговоры о важном]) VALUES (?, ?, ?, ?)",
                 (
-                    group_data['Название'],
+                    group_data['Группа'],
                     group_data.get('Подгруппа', 'Нет'),
                     group_data.get('Самообразование'),
                     group_data.get('Разговоры о важном', 0)
@@ -110,24 +107,19 @@ class DBOperations:
 
     def update_group(self, group_id: int, group_data: Dict[str, Any]) -> bool:
         try:
-            # Проверяем, не существует ли уже такой группы с такой же подгруппой (кроме текущей)
-            existing_groups = self.get_groups()
-            group_name = group_data['Название']
+            group_name = group_data['Группа']
             subgroup = group_data.get('Подгруппа', 'Нет')
 
-            for existing in existing_groups:
-                if (existing['ID'] != group_id and
-                        existing['Название'].upper() == group_name.upper() and
-                        existing['Подгруппа'].upper() == subgroup.upper()):
-                    return False
+            if self.check_group_exists_any_subgroup(group_name, exclude_id=group_id):
+                return False
 
             if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and subgroup == "Нет":
                 return False
 
             return self.db.execute_command(
-                "UPDATE Группы SET Название = ?, Подгруппа = ?, Самообразование = ?, [Разговоры о важном] = ? WHERE ID = ?",
+                "UPDATE Группы SET Группа = ?, Подгруппа = ?, Самообразование = ?, [Разговоры о важном] = ? WHERE ID = ?",
                 (
-                    group_data['Название'],
+                    group_data['Группа'],
                     group_data.get('Подгруппа', 'Нет'),
                     group_data.get('Самообразование'),
                     group_data.get('Разговоры о важном', 0),
@@ -147,22 +139,41 @@ class DBOperations:
 
     def check_group_exists(self, group_name: str, subgroup: str = "Нет", exclude_id: Optional[int] = None) -> bool:
         try:
-            groups = self.get_groups()
-            for group in groups:
-                if (group['Название'].upper() == group_name.upper() and
-                        group['Подгруппа'].upper() == subgroup.upper()):
-                    if exclude_id and group['ID'] == exclude_id:
-                        continue
-                    return True
-            return False
+            query = """
+            SELECT COUNT(*) as count FROM Группы 
+            WHERE UPPER(Группа) = ? AND UPPER(Подгруппа) = ?
+            """
+            params = [group_name.upper(), subgroup.upper()]
+
+            if exclude_id:
+                query += " AND ID != ?"
+                params.append(exclude_id)
+
+            result = self.db.execute_query(query, tuple(params))
+            return result[0]['count'] > 0 if result else False
         except Exception as e:
             print(f"Ошибка при проверке существования группы: {e}")
+            return False
+
+    def check_group_exists_any_subgroup(self, group_name: str, exclude_id: Optional[int] = None) -> bool:
+        try:
+            query = "SELECT COUNT(*) as count FROM Группы WHERE UPPER(Группа) = ?"
+            params = [group_name.upper()]
+
+            if exclude_id:
+                query += " AND ID != ?"
+                params.append(exclude_id)
+
+            result = self.db.execute_query(query, tuple(params))
+            return result[0]['count'] > 0 if result else False
+        except Exception as e:
+            print(f"Ошибка при проверке существования группы в любой подгруппе: {e}")
             return False
 
     # ========== МОДУЛИ ==========
     def get_modules(self) -> List[Dict[str, Any]]:
         try:
-            return self.db.execute_query("SELECT Код, Название FROM Модули ORDER BY Код")
+            return self.db.execute_query("SELECT ID, Код, Название FROM Модули ORDER BY Код")
         except Exception as e:
             print(f"Ошибка при получении модулей: {e}")
             return []
@@ -177,33 +188,45 @@ class DBOperations:
             print(f"Ошибка при добавлении модуля: {e}")
             return False
 
-    def check_module_exists(self, code: str) -> bool:
+    def update_module(self, module_id: int, code: str, name: str) -> bool:
         try:
-            result = self.db.execute_query(
-                "SELECT COUNT(*) as count FROM Модули WHERE Код = ?",
-                (code,)
+            return self.db.execute_command(
+                "UPDATE Модули SET Код = ?, Название = ? WHERE ID = ?",
+                (code, name, module_id)
             )
+        except Exception as e:
+            print(f"Ошибка при обновлении модуля: {e}")
+            return False
+
+    def delete_module(self, module_id: int) -> bool:
+        try:
+            return self.db.execute_command("DELETE FROM Модули WHERE ID = ?", (module_id,))
+        except Exception as e:
+            print(f"Ошибка при удалении модуля: {e}")
+            return False
+
+    def check_module_exists(self, code: str, exclude_id: Optional[int] = None) -> bool:
+        try:
+            if exclude_id:
+                result = self.db.execute_query(
+                    "SELECT COUNT(*) as count FROM Модули WHERE Код = ? AND ID != ?",
+                    (code, exclude_id)
+                )
+            else:
+                result = self.db.execute_query(
+                    "SELECT COUNT(*) as count FROM Модули WHERE Код = ?",
+                    (code,)
+                )
             return result[0]['count'] > 0 if result else False
         except Exception as e:
             print(f"Ошибка при проверке существования модуля: {e}")
-            return False
-
-    def check_module_exists_by_code(self, exclude_code: str, code: str) -> bool:
-        try:
-            modules = self.get_modules()
-            for module in modules:
-                if module['Код'] != exclude_code and module['Код'].upper() == code.upper():
-                    return True
-            return False
-        except Exception as e:
-            print(f"Ошибка при проверке существования модуля по коду: {e}")
             return False
 
     # ========== ДИСЦИПЛИНЫ ==========
     def check_subject_exists(self, name: str, module: str) -> bool:
         try:
             result = self.db.execute_query(
-                "SELECT COUNT(*) as count FROM Дисциплины WHERE Название = ? AND Модуль = ?",
+                "SELECT COUNT(*) as count FROM Дисциплины WHERE Дисциплина = ? AND Модуль = ?",
                 (name, module)
             )
             return result[0]['count'] > 0 if result else False
@@ -215,15 +238,23 @@ class DBOperations:
         try:
             query = """
             SELECT 
-                п.ID, 
-                п.Название as Дисциплина, 
-                п.Модуль as [Код модуля],
-                м.Название as [Название модуля]
-            FROM Дисциплины п
-            LEFT JOIN Модули м ON п.Модуль = м.Код
-            ORDER BY п.ID
+                d.ID, 
+                d.Дисциплина as Дисциплина, 
+                d.Модуль as [Код модуля],
+                m.Название as [Название модуля]
+            FROM Дисциплины d
+            LEFT JOIN Модули m ON d.Модуль = m.Код
+            ORDER BY d.ID
             """
-            return self.db.execute_query(query)
+            subjects = self.db.execute_query(query)
+
+            for subject in subjects:
+                if subject['Код модуля'] is None:
+                    subject['Код модуля'] = ''
+                if subject['Название модуля'] is None:
+                    subject['Название модуля'] = ''
+
+            return subjects
         except Exception as e:
             print(f"Ошибка при получении дисциплин с модулями: {e}")
             return []
@@ -234,8 +265,8 @@ class DBOperations:
 
         try:
             cursor.execute(
-                "INSERT INTO Дисциплины (Название, Модуль) VALUES (?, ?)",
-                (subject_data['Название'], subject_data['Модуль'])
+                "INSERT INTO Дисциплины (Дисциплина, Модуль) VALUES (?, ?)",
+                (subject_data['Дисциплина'], subject_data['Модуль'])
             )
 
             subject_id = cursor.lastrowid
@@ -262,8 +293,8 @@ class DBOperations:
 
         try:
             cursor.execute(
-                "UPDATE Дисциплины SET Название = ?, Модуль = ? WHERE ID = ?",
-                (subject_data['Название'], subject_data['Модуль'], subject_id)
+                "UPDATE Дисциплины SET Дисциплина = ?, Модуль = ? WHERE ID = ?",
+                (subject_data['Дисциплина'], subject_data['Модуль'], subject_id)
             )
 
             cursor.execute("DELETE FROM Дисциплина_Кабинет WHERE ДисциплинаID = ?", (subject_id,))
@@ -286,7 +317,7 @@ class DBOperations:
     def get_classrooms_by_subject(self, subject_id: int) -> List[Dict[str, Any]]:
         try:
             return self.db.execute_query(
-                """SELECT к.ID, к.Номер, т.Название as Территория 
+                """SELECT к.ID, к.Кабинет, т.Территория
                 FROM Кабинеты к
                 JOIN Дисциплина_Кабинет пк ON к.ID = пк.КабинетID
                 JOIN Территории т ON к.ТерриторияID = т.ID
@@ -300,7 +331,8 @@ class DBOperations:
     # ========== ТЕРРИТОРИИ И КАБИНЕТЫ ==========
     def get_territories(self) -> List[Dict[str, Any]]:
         try:
-            return self.db.execute_query("SELECT ID, Название FROM Территории ORDER BY Название")
+            return self.db.execute_query(
+                "SELECT ID, Территория, Цвет FROM Территории ORDER BY Территория")
         except Exception as e:
             print(f"Ошибка при получении территорий: {e}")
             return []
@@ -308,10 +340,10 @@ class DBOperations:
     def get_classrooms(self) -> List[Dict[str, Any]]:
         try:
             query = """
-            SELECT к.ID, к.Номер, т.Название as Территория 
+            SELECT к.ID, к.Кабинет, т.Территория
             FROM Кабинеты к
             LEFT JOIN Территории т ON к.ТерриторияID = т.ID
-            ORDER BY т.Название, к.Номер
+            ORDER BY т.Территория, к.Кабинет 
             """
             return self.db.execute_query(query)
         except Exception as e:
@@ -321,7 +353,7 @@ class DBOperations:
     def get_classrooms_by_territory(self, territory_id: int) -> List[Dict[str, Any]]:
         try:
             return self.db.execute_query(
-                "SELECT ID, Номер FROM Кабинеты WHERE ТерриторияID = ? ORDER BY Номер",
+                "SELECT ID, Кабинет FROM Кабинеты WHERE ТерриторияID = ? ORDER BY Кабинет",
                 (territory_id,)
             )
         except Exception as e:
@@ -331,7 +363,7 @@ class DBOperations:
     def get_classroom_by_id(self, classroom_id: int) -> Optional[Dict[str, Any]]:
         try:
             result = self.db.execute_query(
-                "SELECT ID, Номер, ТерриторияID FROM Кабинеты WHERE ID = ?",
+                "SELECT ID, Кабинет, ТерриторияID FROM Кабинеты WHERE ID = ?",
                 (classroom_id,)
             )
             return result[0] if result else None
@@ -342,7 +374,7 @@ class DBOperations:
     def check_classroom_exists(self, number: str, territory_id: int) -> bool:
         try:
             result = self.db.execute_query(
-                "SELECT COUNT(*) as count FROM Кабинеты WHERE Номер = ? AND ТерриторияID = ?",
+                "SELECT COUNT(*) as count FROM Кабинеты WHERE Кабинет = ? AND ТерриторияID = ?",
                 (number, territory_id)
             )
             return result[0]['count'] > 0 if result else False
@@ -355,12 +387,12 @@ class DBOperations:
             query = """
             SELECT 
                 к.ID, 
-                к.Номер as [Номер кабинета],
-                т.Название as Территория,
+                к.Кабинет as [Номер кабинета],
+                т.Территория as Территория,
                 к.Вместимость
             FROM Кабинеты к
             LEFT JOIN Территории т ON к.ТерриторияID = т.ID
-            ORDER BY т.Название, к.Номер
+            ORDER BY т.Территория, к.Кабинет
             """
             return self.db.execute_query(query)
         except Exception as e:
@@ -395,7 +427,7 @@ class DBOperations:
     def check_territory_exists(self, name: str) -> bool:
         try:
             result = self.db.execute_query(
-                "SELECT COUNT(*) as count FROM Территории WHERE Название = ?",
+                "SELECT COUNT(*) as count FROM Территории WHERE Территория = ?",
                 (name,)
             )
             return result[0]['count'] > 0 if result else False
@@ -407,7 +439,7 @@ class DBOperations:
         try:
             territories = self.get_territories()
             for territory in territories:
-                if territory['ID'] != territory_id and territory['Название'].upper() == name.upper():
+                if territory['ID'] != territory_id and territory['Территория'].upper() == name.upper():
                     return True
             return False
         except Exception as e:
@@ -418,7 +450,7 @@ class DBOperations:
         try:
             territories = self.get_territories()
             for territory in territories:
-                if territory['Название'] == territory_name:
+                if territory['Территория'] == territory_name:
                     return territory['ID']
             return None
         except Exception as e:
@@ -427,28 +459,27 @@ class DBOperations:
 
     # ========== ПРЕПОДАВАТЕЛИ ==========
     def get_teachers_with_preferences(self) -> List[Dict[str, Any]]:
-        """Получение преподавателей с предпочтениями"""
         try:
             query = """
-            SELECT ID, ФИО, 
-                   CASE WHEN Совместитель = 1 THEN 'Да' ELSE 'Нет' END as Совместитель,
-                   COALESCE([Дни занятий], 'Любые') as [Дни занятий]
-            FROM Преподаватели 
-            ORDER BY ФИО
-            """
+                SELECT ID, ФИО, 
+                       CASE WHEN Совместитель = 1 THEN 'Да' ELSE 'Нет' END as Совместитель,
+                       COALESCE([Дни занятий], 'Любые') as [Дни занятий]
+                FROM Преподаватели 
+                ORDER BY ФИО
+                """
             teachers = self.db.execute_query(query)
 
             for teacher in teachers:
                 teacher_id = teacher['ID']
 
                 territory_query = """
-                SELECT т.Название
-                FROM Преподаватель_Территория пт
-                JOIN Территории т ON пт.ТерриторияID = т.ID
-                WHERE пт.ПреподавательID = ?
-                ORDER BY пт.ID
-                LIMIT 2
-                """
+                    SELECT т.ID, т.Территория as Название
+                    FROM Преподаватель_Территория пт
+                    JOIN Территории т ON пт.ТерриторияID = т.ID
+                    WHERE пт.ПреподавательID = ?
+                    ORDER BY пт.ID
+                    LIMIT 2
+                    """
                 territory_result = self.db.execute_query(territory_query, (teacher_id,))
 
                 if territory_result:
@@ -487,11 +518,11 @@ class DBOperations:
     def get_teacher_territories(self, teacher_id: int) -> List[Dict[str, Any]]:
         try:
             query = """
-            SELECT т.ID, т.Название
+            SELECT т.ID, т.Территория
             FROM Преподаватель_Территория пт
             JOIN Территории т ON пт.ТерриторияID = т.ID
             WHERE пт.ПреподавательID = ?
-            ORDER BY т.Название
+            ORDER BY т.Территория
             """
             return self.db.execute_query(query, (teacher_id,))
         except Exception as e:
