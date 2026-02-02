@@ -50,6 +50,7 @@ class Classroom:
 
 @dataclass
 class Module:
+    id: Optional[int] = None
     code: str = ""
     name: str = ""
 
