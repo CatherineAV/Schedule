@@ -2,7 +2,7 @@ import flet as ft
 from typing import Callable, List, Dict, Any, Optional
 from database.operations import DBOperations
 from ui.components import Toast, DataTableManager, PALETTE, Validator
-from ui.forms import ModuleForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
+from ui.forms import ModuleForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm, WorkloadForm
 
 
 class BasePage:
@@ -110,6 +110,12 @@ class DataMenu(BasePage):
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
                 on_click=lambda e: self._on_section_click("Кабинеты")
             ),
+            ft.ElevatedButton(
+                "Нагрузка",
+                icon=ft.Icons.SCHEDULE,
+                style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                on_click=lambda e: self._on_section_click("Нагрузка")
+            ),
         ])
 
         self.content.content = ft.Column([
@@ -147,6 +153,9 @@ class DataPane(BasePage):
         elif section_name == "Модули":
             data = self.db_ops.get_modules()
             columns = ["ID", "Код", "Название"]
+        elif section_name == "Нагрузка":
+            data = self.db_ops.get_workloads()
+            columns = ["ID", "Преподаватель", "Дисциплина", "Группа", "Подгруппа", "Часы в неделю"]
         else:
             data = self.db_ops.get_table_data(section_name)
             columns = self.db_ops.get_table_columns(section_name)
@@ -211,6 +220,8 @@ class DataPane(BasePage):
                     success = self.db_ops.delete_record("Кабинеты", record['ID'])
                 elif section_name == "Модули":
                     success = self.db_ops.delete_module(record['ID'])
+                elif section_name == "Нагрузка":
+                    success = self.db_ops.delete_workload(record['ID'])
                 else:
                     success = self.db_ops.delete_record(section_name, record['ID'])
 
@@ -258,6 +269,8 @@ class DataPane(BasePage):
                 self._render_edit_module_form(record)
             elif section_name == "Территории":
                 self._render_edit_territory_form(record)
+            elif section_name == "Нагрузка":
+                self._render_edit_workload_form(record)
             else:
                 self._render_edit_standard_form(section_name, record, columns)
 
@@ -329,6 +342,8 @@ class DataPane(BasePage):
             self._render_add_module_form()
         elif table_name == "Территории":
             self._render_add_territory_form()
+        elif table_name == "Нагрузка":
+            self._render_workload_add_form()
         else:
             self._render_standard_add_form(table_name, columns)
 
@@ -342,7 +357,7 @@ class DataPane(BasePage):
                 self.render("Группы")
             else:
                 self.toast.show(
-                    "Ошибка при добавлении группы! Возможно, такая группа с такой подгруппой уже существует.",
+                    "Ошибка при добавлении группы! Возможно, такая группа уже существует.",
                     success=False)
 
         def on_form_cancel(e):
@@ -492,7 +507,7 @@ class DataPane(BasePage):
         group_data = {
             'Группа': record['Группа'],
             'Подгруппа': record['Подгруппа'],
-            'Самообразование': record['Самообразование'] if record['Самообразование'] else 'нет',
+            'Самообразование': record['Самообразование'] if record['Самообразование'] else 'Нет',
             'Разговоры о важном': 1 if record['Разговоры о важном'] == "Да" or record['Разговоры о важном'] == 1 else 0
         }
 
@@ -776,6 +791,68 @@ class DataPane(BasePage):
 
         self.page.update()
 
+    def _render_workload_add_form(self):
+        def on_form_submit(workload_data):
+            success = self.db_ops.insert_workload(workload_data)
+            if success:
+                self.toast.show("Нагрузка успешно добавлена!", success=True)
+                self.render("Нагрузка")
+            else:
+                self.toast.show("Ошибка при добавлении нагрузки!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Нагрузка")
+
+        workload_form = WorkloadForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        workload_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=workload_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_workload_form(self, record):
+        def on_form_submit(workload_data):
+            success = self.db_ops.update_workload(record['ID'], workload_data)
+            if success:
+                self.toast.show("Нагрузка успешно обновлена!", success=True)
+                self.render("Нагрузка")
+            else:
+                self.toast.show("Ошибка при обновлении нагрузки!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Нагрузка")
+
+        group_name = record['Группа']
+        subgroup = record.get('Подгруппа', 'Нет')
+        if subgroup and subgroup != "Нет" and subgroup != "None":
+            group_display = f"{group_name} - {subgroup}"
+        else:
+            group_display = group_name
+
+        workload_data = {
+            'Преподаватель': record['Преподаватель'],
+            'Дисциплина': record['Дисциплина'],
+            'Группа': record['Группа'],
+            'Подгруппа': record.get('Подгруппа', 'Нет'),
+            'Часы в неделю': record['Часы в неделю']
+        }
+
+        workload_form = WorkloadForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                     edit_mode=True, workload_data=workload_data)
+        workload_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=workload_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
     def _render_edit_standard_form(self, table_name: str, record: Dict, columns: List[str]):
 
         form_fields_ref = {}
@@ -792,6 +869,8 @@ class DataPane(BasePage):
 
             if table_name == "Модули":
                 success = self.db_ops.update_module(record['Код'], data)
+            elif table_name == "Нагрузка":
+                success = self.db_ops.update_workload(record['ID'], data)
             else:
                 success = self.db_ops.update_record(table_name, record['ID'], data)
 
