@@ -2,7 +2,7 @@ import flet as ft
 from typing import Callable, List, Dict, Any, Optional
 from database.operations import DBOperations
 from ui.components import Toast, DataTableManager, PALETTE, Validator
-from ui.forms import GroupForm, ClassroomForm, TeacherForm
+from ui.forms import ModuleForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
 
 
 class BasePage:
@@ -81,8 +81,14 @@ class DataMenu(BasePage):
                 on_click=lambda e: self._on_section_click("Группы")
             ),
             ft.ElevatedButton(
+                "Модули",
+                icon=ft.Icons.DATA_OBJECT,
+                style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                on_click=lambda e: self._on_section_click("Модули")
+            ),
+            ft.ElevatedButton(
                 "Дисциплины",
-                icon=ft.Icons.CLASS_,
+                icon=ft.Icons.BOOK,
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
                 on_click=lambda e: self._on_section_click("Дисциплины")
             ),
@@ -100,7 +106,7 @@ class DataMenu(BasePage):
             ),
             ft.ElevatedButton(
                 "Кабинеты",
-                icon=ft.Icons.PLACE,
+                icon=ft.Icons.ROOM,
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
                 on_click=lambda e: self._on_section_click("Кабинеты")
             ),
@@ -124,7 +130,7 @@ class DataMenu(BasePage):
 class DataPane(BasePage):
     def render(self, section_name: str):
         if section_name == "Группы":
-            data = self.db_ops.get_groups_with_subgroups()
+            data = self.db_ops.get_groups()
             columns = ["ID", "Группа", "Подгруппа", "Самообразование", "Разговоры о важном"]
         elif section_name == "Дисциплины":
             data = self.db_ops.get_subjects_with_module_names()
@@ -134,10 +140,13 @@ class DataPane(BasePage):
             columns = ["ID", "ФИО", "Совместитель", "Дни занятий", "Территория"]
         elif section_name == "Территории":
             data = self.db_ops.get_table_data("Территории")
-            columns = ["ID", "Название", "Цвет"]
+            columns = ["ID", "Территория", "Цвет"]
         elif section_name == "Кабинеты":
             data = self.db_ops.get_classrooms_with_territory_names()
             columns = ["ID", "Номер кабинета", "Территория", "Вместимость"]
+        elif section_name == "Модули":
+            data = self.db_ops.get_modules()
+            columns = ["ID", "Код", "Название"]
         else:
             data = self.db_ops.get_table_data(section_name)
             columns = self.db_ops.get_table_columns(section_name)
@@ -178,20 +187,30 @@ class DataPane(BasePage):
                 self.toast.show("Выберите запись для удаления!", success=False)
                 return
 
+            record = data[selected_row]
+
             dialog = ft.AlertDialog(
                 modal=True,
                 title=ft.Text("Подтверждение удаления"),
-                content=ft.Text("Вы уверены, что хотите удалить эту запись?"),
+                content=ft.Text(f"Вы уверены, что хотите удалить выбранную запись?"),
                 actions=[]
             )
 
             def on_confirm_delete(evt):
-                record = data[selected_row]
+                success = False
 
                 if section_name == "Группы":
-                    success = self.db_ops.delete_group_with_subgroups(record['Группа'], record['Подгруппа'])
+                    success = self.db_ops.delete_group(record['ID'])
                 elif section_name == "Территории":
                     success = self.db_ops.delete_territory_with_classrooms(record['ID'])
+                elif section_name == "Дисциплины":
+                    success = self.db_ops.delete_record("Дисциплины", record['ID'])
+                elif section_name == "Преподаватели":
+                    success = self.db_ops.delete_record("Преподаватели", record['ID'])
+                elif section_name == "Кабинеты":
+                    success = self.db_ops.delete_record("Кабинеты", record['ID'])
+                elif section_name == "Модули":
+                    success = self.db_ops.delete_module(record['ID'])
                 else:
                     success = self.db_ops.delete_record(section_name, record['ID'])
 
@@ -235,6 +254,10 @@ class DataPane(BasePage):
                 self._render_edit_teacher_form(record)
             elif section_name == "Кабинеты":
                 self._render_edit_classroom_form(record)
+            elif section_name == "Модули":
+                self._render_edit_module_form(record)
+            elif section_name == "Территории":
+                self._render_edit_territory_form(record)
             else:
                 self._render_edit_standard_form(section_name, record, columns)
 
@@ -279,7 +302,9 @@ class DataPane(BasePage):
                 ft.Text(section_name, size=20, weight="bold", color=PALETTE[2]),
                 ft.Row([add_button, edit_button, delete_button], spacing=10)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+
             ft.Divider(height=20, color=PALETTE[1]),
+
             ft.Container(
                 content=table_scroll,
                 expand=True,
@@ -291,31 +316,6 @@ class DataPane(BasePage):
 
         self.page.update()
 
-    def _format_preferences_for_display(self, preferences_str: str) -> str:
-        """Форматирование предпочтений для отображения в таблице"""
-        if not preferences_str:
-            return "Нет"
-
-        try:
-            parts = []
-            day_blocks = preferences_str.split(';')
-            for block in day_blocks:
-                if ':' in block:
-                    day, lessons = block.split(':')
-                    day_name = {
-                        'пн': 'Пн',
-                        'вт': 'Вт',
-                        'ср': 'Ср',
-                        'чт': 'Чт',
-                        'пт': 'Пт',
-                        'сб': 'Сб'
-                    }.get(day, day)
-                    parts.append(f"{day_name}: {lessons}")
-
-            return '; '.join(parts)
-        except:
-            return preferences_str
-
     def _render_add_form(self, table_name: str, columns: List[str]):
         if table_name == "Группы":
             self._render_group_add_form()
@@ -325,132 +325,396 @@ class DataPane(BasePage):
             self._render_teacher_add_form()
         elif table_name == "Кабинеты":
             self._render_add_classroom_form()
+        elif table_name == "Модули":
+            self._render_add_module_form()
+        elif table_name == "Территории":
+            self._render_add_territory_form()
         else:
             self._render_standard_add_form(table_name, columns)
 
+    # ========== ФОРМЫ ДОБАВЛЕНИЯ ==========
+
+    def _render_group_add_form(self):
+        def on_form_submit(group_data):
+            success = self.db_ops.insert_group(group_data)
+            if success:
+                self.toast.show("Группа успешно добавлена!", success=True)
+                self.render("Группы")
+            else:
+                self.toast.show(
+                    "Ошибка при добавлении группы! Возможно, такая группа с такой подгруппой уже существует.",
+                    success=False)
+
+        def on_form_cancel(e):
+            self.render("Группы")
+
+        group_form = GroupForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        group_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=group_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_add_subject_form(self):
+        def on_form_submit(subject_data, classroom_ids):
+            success = self.db_ops.insert_subject_with_classrooms(subject_data, classroom_ids)
+            if success:
+                self.toast.show("Дисциплина успешно добавлена!", success=True)
+                self.render("Дисциплины")
+            else:
+                self.toast.show("Ошибка при добавлении дисциплины!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Дисциплины")
+
+        subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        subject_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=subject_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_teacher_add_form(self):
+        def on_form_submit(teacher_data):
+            territory_ids = teacher_data.get('Территории', [])
+            success = self.db_ops.insert_teacher_with_territories(teacher_data, territory_ids)
+            if success:
+                self.toast.show("Преподаватель успешно добавлен!", success=True)
+                self.render("Преподаватели")
+            else:
+                self.toast.show("Ошибка при добавлении преподавателя!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Преподаватели")
+
+        teacher_form = TeacherForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        teacher_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=teacher_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_add_classroom_form(self):
+        def on_form_submit(classroom_data):
+            success = self.db_ops.insert_data("Кабинеты", classroom_data)
+            if success:
+                self.toast.show("Кабинет успешно добавлен!", success=True)
+                self.render("Кабинеты")
+            else:
+                self.toast.show("Ошибка при добавлении кабинета!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Кабинеты")
+
+        classroom_form = ClassroomForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        classroom_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=classroom_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_add_module_form(self):
+        def on_form_submit(module_data):
+            success = self.db_ops.insert_module(module_data['Код'], module_data['Название'])
+            if success:
+                self.toast.show("Модуль успешно добавлен!", success=True)
+                self.render("Модули")
+            else:
+                self.toast.show("Ошибка при добавлении модуля!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Модули")
+
+        module_form = ModuleForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        module_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=module_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_add_territory_form(self):
+        def on_form_submit(territory_data):
+            success = self.db_ops.insert_data("Территории", territory_data)
+            if success:
+                self.toast.show("Территория успешно добавлена!", success=True)
+                self.render("Территории")
+            else:
+                self.toast.show("Ошибка при добавлении территории!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Территории")
+
+        territory_form = TerritoryForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        territory_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=territory_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    # ========== ФОРМЫ РЕДАКТИРОВАНИЯ ==========
+
+    def _render_edit_group_form(self, record):
+        def on_form_submit(group_data):
+            success = self.db_ops.update_group(record['ID'], group_data)
+            if success:
+                self.toast.show("Группа успешно обновлена!", success=True)
+                self.render("Группы")
+            else:
+                self.toast.show("Ошибка при обновлении группы!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Группы")
+
+        group_data = {
+            'Группа': record['Группа'],
+            'Подгруппа': record['Подгруппа'],
+            'Самообразование': record['Самообразование'] if record['Самообразование'] else 'нет',
+            'Разговоры о важном': 1 if record['Разговоры о важном'] == "Да" or record['Разговоры о важном'] == 1 else 0
+        }
+
+        group_form = GroupForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                               edit_mode=True, group_data=group_data)
+        group_form.current_group_id = record['ID']
+        group_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=group_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_subject_form(self, record):
+        def on_form_submit(subject_data, classroom_ids):
+            success = self.db_ops.update_subject_with_classrooms(record['ID'], subject_data, classroom_ids)
+            if success:
+                self.toast.show("Дисциплина успешно обновлена!", success=True)
+                self.render("Дисциплины")
+            else:
+                self.toast.show("Ошибка при обновлении дисциплины!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Дисциплины")
+
+        current_classrooms = self.db_ops.get_classrooms_by_subject(record['ID'])
+        classroom_ids = [classroom['ID'] for classroom in current_classrooms]
+
+        subject_data = {
+            'Дисциплина': record['Дисциплина'],
+            'Модуль': record['Код модуля']
+        }
+
+        subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                   edit_mode=True, subject_data=subject_data, classroom_ids=classroom_ids)
+        subject_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=subject_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_teacher_form(self, record):
+        def on_form_submit(teacher_data):
+            territory_ids = teacher_data.pop('Территории', [])
+            success = self.db_ops.update_teacher_with_territories(record['ID'], teacher_data, territory_ids)
+            if success:
+                self.toast.show("Преподаватель успешно обновлен!", success=True)
+                self.render("Преподаватели")
+            else:
+                self.toast.show("Ошибка при обновлении преподавателя!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Преподаватели")
+
+        teacher_territories = self.db_ops.get_teacher_territories(record['ID'])
+        is_part_timer = record.get('Совместитель', 'Нет') == 'Да'
+
+        days_str = record.get('Дни занятий', '')
+        if days_str == 'Любые' or not days_str:
+            days_str = ''
+
+        territory_ids = [t['ID'] for t in teacher_territories]
+
+        teacher_data = {
+            'ФИО': record['ФИО'],
+            'Совместитель': is_part_timer,
+            '[Дни занятий]': days_str,
+            'Территории': territory_ids
+        }
+
+        teacher_form = TeacherForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                   edit_mode=True, teacher_data=teacher_data)
+        teacher_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=teacher_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_classroom_form(self, record):
+        def on_form_submit(classroom_data):
+            current_territory_id = self.db_ops.get_territory_id_by_name(record['Территория'])
+
+            if (classroom_data['Кабинет'] != record['Номер кабинета'] or
+                    classroom_data['ТерриторияID'] != current_territory_id):
+
+                if self.db_ops.check_classroom_exists(classroom_data['Кабинет'], classroom_data['ТерриторияID']):
+                    self.toast.show(f"Кабинет '{classroom_data['Кабинет']}' уже существует на этой территории!",
+                                    success=False)
+                    return
+
+            success = self.db_ops.update_record("Кабинеты", record['ID'], classroom_data)
+            if success:
+                self.toast.show("Кабинет успешно обновлен!", success=True)
+                self.render("Кабинеты")
+            else:
+                self.toast.show("Ошибка при обновлении кабинета!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Кабинеты")
+
+        current_territory_id = self.db_ops.get_territory_id_by_name(record['Территория'])
+
+        classroom_data = {
+            'Кабинет': record['Номер кабинета'],
+            'ТерриторияID': current_territory_id,
+            'Вместимость': record.get('Вместимость')
+        }
+
+        classroom_form = ClassroomForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                       edit_mode=True, classroom_data=classroom_data)
+        classroom_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=classroom_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_module_form(self, record):
+        def on_form_submit(module_data):
+            success = self.db_ops.update_module(record['ID'], module_data['Код'], module_data['Название'])
+            if success:
+                self.toast.show("Модуль успешно обновлен!", success=True)
+                self.render("Модули")
+            else:
+                self.toast.show("Ошибка при обновлении модуля!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Модули")
+
+        module_data = {
+            'ID': record['ID'],
+            'Код': record['Код'],
+            'Название': record['Название']
+        }
+
+        module_form = ModuleForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                 edit_mode=True, module_data=module_data)
+        module_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=module_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
+    def _render_edit_territory_form(self, record):
+        def on_form_submit(territory_data):
+            success = self.db_ops.update_record("Территории", record['ID'], territory_data)
+            if success:
+                self.toast.show("Территория успешно обновлена!", success=True)
+                self.render("Территории")
+            else:
+                self.toast.show("Ошибка при обновлении территории!", success=False)
+
+        def on_form_cancel(e):
+            self.render("Территории")
+
+        territory_data = {
+            'Территория': record['Территория'],
+            'Цвет': record.get('Цвет', '#FFFFFF')
+        }
+
+        territory_form = TerritoryForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                       edit_mode=True, territory_data=territory_data)
+        territory_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=territory_form.build(),
+            padding=20,
+            expand=True
+        )
+
+        self.page.update()
+
     def _render_standard_add_form(self, table_name: str, columns: List[str]):
+
         form_fields_ref = {}
 
         def on_form_submit(e):
             data = {}
             errors = []
 
-            # Собираем данные из полей формы
             for column in columns:
                 if column.lower() != 'id' and column in form_fields_ref:
                     field = form_fields_ref[column]
                     if hasattr(field, 'value'):
-                        # Для dropdown получаем значение, для TextField - value
-                        if isinstance(field, ft.Dropdown):
-                            data[column] = field.value
-                        else:
-                            data[column] = field.value
+                        data[column] = field.value
                     else:
                         data[column] = ""
 
-            # Валидация обязательных полей
-            required_fields_map = {
-                "Территории": ["Название"],
-                "Кабинеты": ["Номер", "ТерриторияID"],
-                "Преподаватели": ["ФИО"],
-                "Модули": ["Код", "Название"],
-                "Потоки": ["Название"]
-            }
+            for column, value in data.items():
+                if column != "Цвет" and column != "Вместимость" and not value:
+                    errors.append(f"Поле '{column}' обязательно для заполнения")
 
-            required_fields = required_fields_map.get(table_name, [])
-            for field_name in required_fields:
-                value = data.get(field_name, "")
-                if not value or (isinstance(value, str) and not value.strip()):
-                    errors.append(f"Поле '{field_name}' обязательно для заполнения")
-
-            # Специфическая валидация для разных таблиц
-            if not errors:
-                if table_name == "Территории":
-                    territory_name = data.get('Название', '').strip()
-                    if self.db_ops.check_territory_exists(territory_name):
-                        errors.append(f"Территория '{territory_name}' уже существует!")
-
-                elif table_name == "Кабинеты":
-                    classroom_number = data.get('Номер', '').strip()
-                    territory_id = data.get('ТерриторияID')
-
-                    if not territory_id:
-                        errors.append("Выберите территорию!")
-                    else:
-                        territory_id_int = int(territory_id)
-                        if self.db_ops.check_classroom_exists(classroom_number, territory_id_int):
-                            errors.append(f"Кабинет '{classroom_number}' уже существует на этой территории!")
-
-                elif table_name == "Преподаватели":
-                    teacher_name = data.get('ФИО', '').strip()
-                    if self.db_ops.check_teacher_exists(teacher_name):
-                        errors.append(f"Преподаватель '{teacher_name}' уже существует!")
-
-                elif table_name == "Модули":
-                    module_code = data.get('Код', '').strip()
-                    if self.db_ops.check_module_exists(module_code):
-                        errors.append(f"Модуль с кодом '{module_code}' уже существует!")
-
-            # Проверка числовых полей
-            if table_name == "Кабинеты" and data.get('Вместимость'):
-                try:
-                    capacity = int(data['Вместимость'])
-                    if capacity < 0:
-                        errors.append("Вместимость не может быть отрицательной!")
-                except ValueError:
-                    errors.append("Вместимость должна быть числом!")
-
-            if table_name == "Преподаватели":
-                if data.get('Нагрузка'):
-                    try:
-                        workload = int(data['Нагрузка'])
-                        if workload < 0:
-                            errors.append("Нагрузка не может быть отрицательной!")
-                    except ValueError:
-                        errors.append("Нагрузка должна быть числом!")
-
-                if data.get('Уроки'):
-                    try:
-                        lessons = int(data['Уроки'])
-                        if lessons < 0:
-                            errors.append("Количество уроков не может быть отрицательным!")
-                    except ValueError:
-                        errors.append("Количество уроков должно быть числом!")
-
-            # Если есть ошибки - показываем их и прерываем сохранение
             if errors:
                 for error in errors:
                     self.toast.show(error, success=False)
                 return
 
-            # Подготовка данных для сохранения
-            clean_data = {}
-            for column, value in data.items():
-                if column.lower() != 'id':
-                    # Обработка пустых значений для числовых полей
-                    if table_name == "Кабинеты" and column == "Вместимость" and not value:
-                        clean_data[column] = None
-                    elif table_name == "Преподаватели" and column in ["Нагрузка", "Уроки"] and not value:
-                        clean_data[column] = None
-                    else:
-                        clean_data[column] = value
-
-            # Сохранение данных
-            if self.db_ops.insert_data(table_name, clean_data):
+            if self.db_ops.insert_data(table_name, data):
                 self.toast.show(f"Данные успешно добавлены!", success=True)
                 self.render(table_name)
             else:
                 self.toast.show(f"Ошибка при добавлении данных!", success=False)
 
-        title_map = {
-            "Территории": "Добавить территорию",
-            "Кабинеты": "Добавить кабинет",
-            "Преподаватели": "Добавить преподавателя",
-            "Модули": "Добавить модуль",
-            "Потоки": "Добавить поток"
-        }
-
-        title = title_map.get(table_name, f"Добавить {table_name.lower()}")
+        title = f"Добавить {self._get_table_russian_name(table_name).lower()}"
 
         scrollable_content = ft.Column([
             ft.Text(title, size=18, weight="bold", color=PALETTE[2])
@@ -458,69 +722,19 @@ class DataPane(BasePage):
 
         for column in columns:
             if column.lower() != 'id':
-                if table_name == "Кабинеты" and column == "ТерриторияID":
-                    territories = self.db_ops.get_territories()
-                    territory_options = [ft.dropdown.Option(str(t['ID']), t['Название']) for t in territories]
-
-                    field = ft.Dropdown(
-                        label="Территория",
-                        width=600,
-                        border_color=PALETTE[3],
-                        bgcolor=ft.Colors.BLUE_GREY,
-                        color=PALETTE[2],
-                        options=territory_options,
-                    )
-
-                elif column in ["Вместимость", "Нагрузка", "Уроки"]:
+                if column == "Цвет":
                     field = ft.TextField(
                         label=column,
                         border_color=PALETTE[3],
                         color=PALETTE[2],
-                        keyboard_type=ft.KeyboardType.NUMBER
+                        hint_text="#FFFFFF"
                     )
-
-                elif column == "Цвет":
-                    field = ft.TextField(
-                        label=column,
-                        border_color=PALETTE[3],
-                        color=PALETTE[2],
-                        hint_text="Например: #FF0000"
-                    )
-
-                elif column == "Разговоры о важном":
-                    field = ft.Switch(
-                        label=column,
-                        value=False,
-                        label_style=ft.TextStyle(color=PALETTE[2])
-                    )
-
-                elif column == "Самообразование":
-                    field = ft.Dropdown(
-                        label=column,
-                        width=300,
-                        border_color=PALETTE[3],
-                        bgcolor=ft.Colors.BLUE_GREY,
-                        color=PALETTE[2],
-                        options=[
-                            ft.dropdown.Option("нет"),
-                            ft.dropdown.Option("пн"),
-                            ft.dropdown.Option("вт"),
-                            ft.dropdown.Option("ср"),
-                            ft.dropdown.Option("чт"),
-                            ft.dropdown.Option("пт"),
-                            ft.dropdown.Option("сб")
-                        ],
-                        value="нет"
-                    )
-
                 else:
-                    # Стандартное текстовое поле
                     field = ft.TextField(
                         label=column,
                         border_color=PALETTE[3],
                         color=PALETTE[2]
                     )
-
                 form_fields_ref[column] = field
                 scrollable_content.controls.append(field)
 
@@ -563,19 +777,11 @@ class DataPane(BasePage):
         self.page.update()
 
     def _render_edit_standard_form(self, table_name: str, record: Dict, columns: List[str]):
-        if table_name == "Кабинеты":
-            self._render_edit_classroom_form(record)
-            return
-        if table_name == "Преподаватели":
-            self._render_edit_teacher_form(record)
-            return
 
         form_fields_ref = {}
 
         def on_form_submit(e):
             data = {}
-            errors = []
-
             for column in columns:
                 if column.lower() != 'id' and column in form_fields_ref:
                     field = form_fields_ref[column]
@@ -584,67 +790,18 @@ class DataPane(BasePage):
                     else:
                         data[column] = ""
 
-            required_fields = {
-                "Территории": ["Название"],
-                "Кабинеты": ["Номер", "ТерриторияID"],
-                "Преподаватели": ["ФИО"],
-                "Модули": ["Код", "Название"],
-                "Потоки": ["Название"]
-            }
+            if table_name == "Модули":
+                success = self.db_ops.update_module(record['Код'], data)
+            else:
+                success = self.db_ops.update_record(table_name, record['ID'], data)
 
-            if table_name in required_fields:
-                for field_name in required_fields[table_name]:
-                    if field_name in data:
-                        error = Validator.validate_required(str(data[field_name]), field_name)
-                        if error:
-                            errors.append(error)
-
-            if table_name == "Территории":
-                new_territory_name = data.get('Название', '').strip()
-                if new_territory_name != record['Название']:
-                    if self.db_ops.check_territory_exists(new_territory_name):
-                        errors.append(f"Территория '{new_territory_name}' уже существует!")
-
-            elif table_name == "Преподаватели":
-                new_teacher_name = data.get('ФИО', '').strip()
-                if new_teacher_name != record['ФИО']:
-                    if self.db_ops.check_teacher_exists(new_teacher_name):
-                        errors.append(f"Преподаватель '{new_teacher_name}' уже существует!")
-
-            elif table_name == "Модули":
-                new_module_code = data.get('Код', '').strip()
-                if new_module_code != record['Код']:
-                    if self.db_ops.check_module_exists(new_module_code):
-                        errors.append(f"Модуль с кодом '{new_module_code}' уже существует!")
-
-            clean_data = {}
-            for column, value in data.items():
-                if column.lower() != 'id':
-                    if table_name == "Преподаватели" and column in ["Нагрузка", "Уроки"] and not value:
-                        clean_data[column] = None
-                    else:
-                        clean_data[column] = value
-
-            if self.db_ops.update_record(table_name, record['ID'], clean_data):
+            if success:
                 self.toast.show(f"Данные успешно обновлены!", success=True)
                 self.render(table_name)
             else:
                 self.toast.show(f"Ошибка при обновлении данных!", success=False)
 
-        title_map = {
-            "Территории": "Редактировать территорию",
-            "Кабинеты": "Редактировать кабинет",
-            "Преподаватели": "Редактировать преподавателя",
-            "Модули": "Редактировать модуль",
-            "Потоки": "Редактировать поток"
-        }
-
-        title = title_map.get(table_name, f"Редактировать {table_name.lower()}")
-
-        if table_name.endswith('ы'):
-            title = f"Редактировать {table_name[:-1].lower()}у"
-        elif table_name.endswith('и'):
-            title = f"Редактировать {table_name[:-1].lower()}ь"
+        title = f"Редактировать {self._get_table_russian_name(table_name).lower()}"
 
         scrollable_content = ft.Column([
             ft.Text(title, size=18, weight="bold", color=PALETTE[2])
@@ -653,28 +810,12 @@ class DataPane(BasePage):
         for column in columns:
             if column.lower() != 'id':
                 current_value = record.get(column, "")
-
-                if column in ["Вместимость", "Нагрузка", "Уроки"]:
-                    field = ft.TextField(
-                        label=column,
-                        border_color=PALETTE[3],
-                        color=PALETTE[2],
-                        value=str(current_value) if current_value else "",
-                        keyboard_type=ft.KeyboardType.NUMBER
-                    )
-                elif column == "Разговоры о важном":
-                    field = ft.Switch(
-                        label=column,
-                        value=bool(current_value),
-                        label_style=ft.TextStyle(color=PALETTE[2])
-                    )
-                else:
-                    field = ft.TextField(
-                        label=column,
-                        border_color=PALETTE[3],
-                        color=PALETTE[2],
-                        value=str(current_value) if current_value is not None else ""
-                    )
+                field = ft.TextField(
+                    label=column,
+                    border_color=PALETTE[3],
+                    color=PALETTE[2],
+                    value=str(current_value) if current_value is not None else ""
+                )
                 form_fields_ref[column] = field
                 scrollable_content.controls.append(field)
 
@@ -716,261 +857,13 @@ class DataPane(BasePage):
 
         self.page.update()
 
-    def _render_group_add_form(self):
-        def on_form_submit(group_data, subgroups):
-            success = self.db_ops.insert_group_with_subgroups(group_data, subgroups)
-            if success:
-                self.toast.show("Группа и подгруппы успешно добавлены!", success=True)
-                self.render("Группы")
-            else:
-                self.toast.show("Ошибка при добавлении группы! Возможно, такая группа или подгруппа "
-                                "уже существует.", success=False)
-
-        def on_form_cancel(e):
-            self.render("Группы")
-
-        group_form = GroupForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
-        group_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=group_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
-
-    def _render_edit_group_form(self, record):
-        group_name = record['Группа']
-        subgroups = [record['Подгруппа']] if record['Подгруппа'] != "Нет" else []
-
-        def on_form_submit(group_data, subgroups):
-            all_groups = self.db_ops.get_groups_with_subgroups()
-            group_id = None
-            for group in all_groups:
-                if group['Группа'] == group_name and group['Подгруппа'] == record['Подгруппа']:
-                    group_id = group['ID']
-                    break
-
-            if group_id and self.db_ops.update_group_with_subgroups(group_id, group_data, subgroups):
-                self.toast.show("Группа успешно обновлена!", success=True)
-                self.render("Группы")
-            else:
-                self.toast.show("Ошибка при обновлении группы!", success=False)
-
-        def on_form_cancel(e):
-            self.render("Группы")
-
-        # Правильно получаем значение дня самообразования
-        current_self_education = record['Самообразование']
-        if current_self_education == "Нет" or not current_self_education:
-            current_self_education = "нет"
-
-        group_data = {
-            'Название': record['Группа'],
-            'Самообразование': current_self_education,  # Передаем правильное значение
-            'Разговоры о важном': 1 if record['Разговоры о важном'] == "Да" else 0
+    def _get_table_russian_name(self, table_name: str) -> str:
+        names = {
+            "Группы": "Группу",
+            "Дисциплины": "Дисциплину",
+            "Преподаватели": "Преподавателя",
+            "Территории": "Территорию",
+            "Кабинеты": "Кабинет",
+            "Модули": "Модуль"
         }
-
-        from ui.forms import GroupForm
-        group_form = GroupForm(
-            on_form_submit, on_form_cancel, self.db_ops, self.toast,
-            edit_mode=True, group_data=group_data, subgroups=subgroups
-        )
-        group_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=group_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
-
-    def _render_add_classroom_form(self):
-        def on_form_submit(classroom_data):
-            success = self.db_ops.insert_data("Кабинеты", classroom_data)
-            if success:
-                self.toast.show("Кабинет успешно добавлен!", success=True)
-                self.render("Кабинеты")
-            else:
-                self.toast.show("Ошибка при добавлении кабинета!", success=False)
-
-        def on_form_cancel(e):
-            self.render("Кабинеты")
-
-        classroom_form = ClassroomForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
-        classroom_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=classroom_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
-
-    def _render_edit_classroom_form(self, record):
-        def on_form_submit(classroom_data):
-            current_territory_id = self.db_ops.get_territory_id_by_name(record['Территория'])
-
-            if (classroom_data['Номер'] != record['Номер кабинета'] or
-                    classroom_data['ТерриторияID'] != current_territory_id):
-
-                if self.db_ops.check_classroom_exists(classroom_data['Номер'], classroom_data['ТерриторияID']):
-                    self.toast.show(f"Кабинет '{classroom_data['Номер']}' уже существует на этой территории!",
-                                    success=False)
-                    return
-
-            success = self.db_ops.update_record("Кабинеты", record['ID'], classroom_data)
-            if success:
-                self.toast.show("Кабинет успешно обновлен!", success=True)
-                self.render("Кабинеты")
-            else:
-                self.toast.show("Ошибка при обновлении кабинета!", success=False)
-
-        def on_form_cancel(e):
-            self.render("Кабинеты")
-
-        current_territory_id = self.db_ops.get_territory_id_by_name(record['Территория'])
-
-        classroom_data = {
-            'Номер': record['Номер кабинета'],
-            'ТерриторияID': current_territory_id,
-            'Вместимость': record.get('Вместимость')
-        }
-
-        classroom_form = ClassroomForm(
-            on_form_submit, on_form_cancel, self.db_ops, self.toast,
-            edit_mode=True, classroom_data=classroom_data
-        )
-        classroom_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=classroom_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
-
-    def _render_add_subject_form(self):
-        def on_form_submit(subject_data, classroom_ids):
-            success = self.db_ops.insert_subject_with_classrooms(subject_data, classroom_ids)
-            if success:
-                self.toast.show("Дисциплина успешно добавлен!", success=True)
-                self.render("Дисциплины")
-            else:
-                self.toast.show("Ошибка при добавлении дисциплины!", success=False)
-
-        def on_form_cancel(e):
-            self.render("Дисциплины")
-
-        from ui.forms import SubjectForm
-        subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
-        subject_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=subject_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
-
-    def _render_edit_subject_form(self, record):
-        def on_form_submit(subject_data, classroom_ids):
-            success = self.db_ops.update_subject_with_classrooms(record['ID'], subject_data, classroom_ids)
-            if success:
-                self.toast.show("Дисциплина успешно обновлен!", success=True)
-                self.render("Дисциплина")
-            else:
-                self.toast.show("Ошибка при обновлении дисциплины!", success=False)
-
-        def on_form_cancel(e):
-            self.render("Дисциплины")
-
-        current_classrooms = self.db_ops.get_classrooms_by_subject(record['ID'])
-        classroom_ids = [classroom['ID'] for classroom in current_classrooms]
-
-        subject_data = {
-            'Название': record['Дисциплина'],
-            'Модуль': record['Код модуля']
-        }
-
-        from ui.forms import SubjectForm
-        subject_form = SubjectForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
-                                   edit_mode=True, subject_data=subject_data, classroom_ids=classroom_ids)
-        subject_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=subject_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
-
-    def _render_teacher_add_form(self):
-        def on_form_submit(teacher_data):
-            territory_ids = teacher_data.pop('Территории', [])
-            success = self.db_ops.insert_teacher_with_territories(teacher_data, territory_ids)
-            if success:
-                self.toast.show("Преподаватель успешно добавлен!", success=True)
-                self.render("Преподаватели")
-            else:
-                self.toast.show("Ошибка при добавлении преподавателя!", success=False)
-
-        def on_form_cancel(e):
-            self.render("Преподаватели")
-
-        teacher_form = TeacherForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
-        teacher_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=teacher_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
-
-    def _render_edit_teacher_form(self, record):
-        def on_form_submit(teacher_data):
-            territory_ids = teacher_data.pop('Территории', [])
-            success = self.db_ops.update_teacher_with_territories(record['ID'], teacher_data, territory_ids)
-            if success:
-                self.toast.show("Преподаватель успешно обновлен!", success=True)
-                self.render("Преподаватели")
-            else:
-                self.toast.show("Ошибка при обновлении преподавателя!", success=False)
-
-        def on_form_cancel(e):
-            self.render("Преподаватели")
-
-        teacher_territories = self.db_ops.get_teacher_territories(record['ID'])
-        territory_ids = [t['ID'] for t in teacher_territories]
-        is_part_timer = record.get('Совместитель', 'Нет') == 'Да'
-
-        days_str = record.get('Дни занятий', '')
-        if days_str == 'Любые':
-            days_str = ''
-
-        teacher_data = {
-            'ФИО': record['ФИО'],
-            'Совместитель': is_part_timer,
-            '[Дни занятий]': days_str,
-            'Территории': territory_ids
-        }
-
-        teacher_form = TeacherForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
-                                   edit_mode=True, teacher_data=teacher_data)
-        teacher_form.set_page(self.page)
-
-        self.content.content = ft.Container(
-            content=teacher_form.build(),
-            padding=20,
-            expand=True
-        )
-
-        self.page.update()
+        return names.get(table_name, table_name)
