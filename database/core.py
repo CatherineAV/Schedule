@@ -13,37 +13,38 @@ class Database:
 
         cursor.executescript("""
         CREATE TABLE IF NOT EXISTS Модули (
-            Код TEXT PRIMARY KEY,
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Код TEXT NOT NULL UNIQUE,
             Название TEXT NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS Группы (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Название TEXT NOT NULL,
+            Группа TEXT NOT NULL,
             Подгруппа TEXT NOT NULL DEFAULT 'Нет',
             Самообразование TEXT,
             [Разговоры о важном] BOOLEAN DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS Территории (
-        ID INTEGER PRIMARY KEY AUTOINCREMENT,
-        Название TEXT NOT NULL,
-        Цвет TEXT DEFAULT '#FFFFFF'
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Территория TEXT NOT NULL,
+            Цвет TEXT DEFAULT '#FFFFFF'
         );
     
         CREATE TABLE IF NOT EXISTS Кабинеты (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            Номер TEXT NOT NULL,
+            Кабинет TEXT NOT NULL,
             ТерриторияID INTEGER NOT NULL,
             Вместимость INTEGER,
             FOREIGN KEY (ТерриторияID) REFERENCES Территории(ID) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS Дисциплины (
-        ID INTEGER PRIMARY KEY AUTOINCREMENT,
-        Название TEXT NOT NULL,
-        Модуль TEXT NOT NULL,
-        FOREIGN KEY (Модуль) REFERENCES Модули(Код)
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Дисциплина TEXT NOT NULL,
+            Модуль TEXT NOT NULL,
+            FOREIGN KEY (Модуль) REFERENCES Модули(Код)
         );
     
         CREATE TABLE IF NOT EXISTS Преподаватели (
