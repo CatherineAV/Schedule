@@ -48,25 +48,47 @@ class DataTableManager:
         selected_row = self.selected_rows.get(section_name, None)
 
         pretty_column_names = {
-            "Название": "Территория",
-            "Номер": "Номер кабинета",
+            "Код": "Код модуля",
+            "Название": "Название модуля",
+            "[Разговоры о важном]": "Разговоры о важном",
+            "Кабинет": "Номер кабинета",
             "ФИО": "Преподаватель",
-            "НазваниеМодуля": "Название модуля"
         }
 
         for i, row in enumerate(data):
             cells = []
             for col in display_columns:
                 value = row.get(col, "")
-                if col == "Разговоры о важном":
-                    value = "Да" if value == 1 or value == "Да" else "Нет"
-                elif col == "Самообразование" and not value:
-                    value = "Нет"
-                elif col == "Подгруппа" and not value:
-                    value = "Нет"
 
-                txt = ft.Text(str(value), color=PALETTE[2], no_wrap=False)
-                cell = ft.DataCell(ft.Container(txt, expand=True, alignment=ft.alignment.center_left))
+                if col == "Разговоры о важном" or col == "[Разговоры о важном]":
+                    value = "Да" if value == 1 or value == "Да" or value == 1.0 else "Нет"
+                elif col == "Самообразование" and (not value or value == "None"):
+                    value = "Нет"
+                elif col == "Подгруппа" and (not value or value == "None"):
+                    value = "Нет"
+                elif col == "Совместитель":
+                    value = "Да" if value == 1 or value == "Да" or value == 1.0 else "Нет"
+                elif col == "Дни занятий" and (not value or value == "Любые" or value == "None"):
+                    value = "Любые"
+                elif col == "Территория" and (not value or value == "Не указана" or value == "None"):
+                    value = "Не указана"
+                elif (col == "Код модуля" or col == "Название модуля") and (value is None or value == "None"):
+                    value = ""
+                elif col == "Вместимость" and (value is None or value == "None" or value == ""):
+                    value = "Не указана"
+                if col == "Цвет" and value:
+                    color_container = ft.Container(
+                        width=20,
+                        height=20,
+                        border_radius=10,
+                        bgcolor=value if value.startswith("#") else f"#{value}",
+                        border=ft.border.all(1, PALETTE[2])
+                    )
+                    cell_content = ft.Row([color_container, ft.Text(value, color=PALETTE[2])], spacing=10)
+                else:
+                    cell_content = ft.Text(str(value), color=PALETTE[2], no_wrap=False)
+
+                cell = ft.DataCell(ft.Container(cell_content, expand=True, alignment=ft.alignment.center_left))
                 cells.append(cell)
 
             data_row = ft.DataRow(
@@ -112,16 +134,9 @@ class Validator:
     @staticmethod
     def validate_unique(db_operations, table_name: str, field_name: str, value: str,
                         exclude_id: Optional[int] = None) -> Optional[str]:
-        """Проверка уникальности значения в таблице"""
         try:
             if table_name == "Группы":
-                # Специальная проверка для групп
-                existing_groups = db_operations.get_groups_with_subgroups()
-                for group in existing_groups:
-                    if group['Группа'].upper() == value.upper():
-                        if exclude_id and group['ID'] == exclude_id:
-                            continue
-                        return f"Группа '{value}' уже существует"
+                return None
             elif table_name == "Территории":
                 if db_operations.check_territory_exists(value):
                     if not exclude_id or not _is_same_territory(db_operations, exclude_id, value):
@@ -135,20 +150,41 @@ class Validator:
                     if not exclude_id or not _is_same_module(db_operations, exclude_id, value):
                         return f"Модуль с кодом '{value}' уже существует"
             elif table_name == "Кабинеты":
-                # Для кабинетов нужна специальная обработка
-                pass  # Обрабатывается отдельно
+                return None
             return None
         except Exception as e:
             print(f"Ошибка при проверке уникальности: {e}")
             return "Ошибка при проверке данных"
 
     @staticmethod
-    def validate_subgroups(group_name: str, subgroups: List[str]) -> Optional[str]:
-        if not subgroups:
-            return "Выберите хотя бы одну подгруппу"
+    def validate_group(group_name: str, subgroup: str) -> Optional[str]:
+        if not group_name:
+            return "Введите название группы"
 
-        if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and "Нет" in subgroups:
+        if not subgroup:
+            return "Выберите подгруппу"
+
+        if not group_name.replace(' ', '').replace('-',
+                                                   '').replace('/', '').replace('(',
+                                                                                '').replace(')',
+                                                                                            '').isalnum():
+            return "Название группы может содержать только буквы, цифры, пробелы, дефисы, слэши и скобки"
+
+        if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and subgroup == "Нет":
             return "Группы ХКО и ХБО должны иметь подгруппы"
+
+        if "ХБО" in group_name.upper() and subgroup not in ["Кукольники", "Бутафоры"]:
+            return "Для группы ХБО допустимые подгруппы: 'Кукольники' или 'Бутафоры'"
+
+        if "ХКО" in group_name.upper() and subgroup not in ["Женская", "Мужская"]:
+            return "Для группы ХКО допустимые подгруппы: 'Женская' или 'Мужская'"
+
+        if "ХКО" not in group_name.upper() and "ХБО" not in group_name.upper():
+            if subgroup in ["Кукольники", "Бутафоры", "Женская", "Мужская"]:
+                return f"Подгруппа '{subgroup}' недопустима для обычных групп"
+
+            if subgroup not in ["Нет", "1", "2", "3"]:
+                return "Для обычных групп допустимые подгруппы: 'Нет', '1', '2', '3'"
 
         return None
 
@@ -164,7 +200,6 @@ class Validator:
 
     @staticmethod
     def validate_teacher_preferences(preferences_str: str) -> Optional[str]:
-        """Проверка предпочтений преподавателя"""
         if not preferences_str:
             return None
 
@@ -194,9 +229,106 @@ class Validator:
         except Exception as e:
             return f"Ошибка при проверке предпочтений: {str(e)}"
 
+    @staticmethod
+    def validate_module_code(code: str) -> Optional[str]:
+        if not code:
+            return "Код модуля не может быть пустым"
+
+        if not code.strip():
+            return "Код модуля не может состоять только из пробелов"
+
+        if len(code) > 20:
+            return "Код модуля не должен превышать 20 символов"
+
+        return None
+
+    @staticmethod
+    def validate_module_name(name: str) -> Optional[str]:
+        if not name:
+            return "Название модуля не может быть пустым"
+
+        if not name.strip():
+            return "Название модуля не может состоять только из пробелов"
+
+        if len(name) > 100:
+            return "Название модуля не должно превышать 100 символов"
+
+        return None
+
+    @staticmethod
+    def validate_territory_name(name: str) -> Optional[str]:
+        if not name:
+            return "Название территории не может быть пустым"
+
+        if not name.strip():
+            return "Название территории не может состоять только из пробелов"
+
+        if len(name) > 50:
+            return "Название территории не должно превышать 50 символов"
+
+        return None
+
+    @staticmethod
+    def validate_classroom_number(number: str) -> Optional[str]:
+        if not number:
+            return "Номер кабинета не может быть пустым"
+
+        if not number.strip():
+            return "Номер кабинета не может состоять только из пробелов"
+
+        if len(number) > 20:
+            return "Номер кабинета не должен превышать 20 символов"
+
+        return None
+
+    @staticmethod
+    def validate_capacity(capacity: Optional[str]) -> Optional[str]:
+        if not capacity or not capacity.strip():
+            return None
+
+        try:
+            cap = int(capacity)
+            if cap < 1:
+                return "Вместимость должна быть положительным числом"
+            if cap > 1000:
+                return "Вместимость не должна превышать 1000 человек"
+        except ValueError:
+            return "Вместимость должна быть целым числом"
+
+        return None
+
+    @staticmethod
+    def validate_teacher_name(name: str) -> Optional[str]:
+        if not name:
+            return "ФИО преподавателя не может быть пустым"
+
+        if not name.strip():
+            return "ФИО преподавателя не может состоять только из пробелов"
+
+        if len(name) > 100:
+            return "ФИО преподавателя не должно превышать 100 символов"
+
+        words = name.strip().split()
+        if len(words) < 2:
+            return "Введите полное ФИО преподавателя (минимум имя и фамилию)"
+
+        return None
+
+    @staticmethod
+    def validate_subject_name(name: str) -> Optional[str]:
+        if not name:
+            return "Название дисциплины не может быть пустым"
+
+        if not name.strip():
+            return "Название дисциплины не может состоять только из пробелов"
+
+        if len(name) > 200:
+            return "Название дисциплины не должно превышать 200 символов"
+
+        return None
+
 
 def _is_same_territory(db_operations, territory_id: int, name: str) -> bool:
-    """Проверяет, относится ли имя к той же территории"""
     territories = db_operations.get_table_data("Территории")
     for territory in territories:
         if territory['ID'] == territory_id:
@@ -205,7 +337,6 @@ def _is_same_territory(db_operations, territory_id: int, name: str) -> bool:
 
 
 def _is_same_teacher(db_operations, teacher_id: int, name: str) -> bool:
-    """Проверяет, относится ли имя к тому же преподавателю"""
     teachers = db_operations.get_table_data("Преподаватели")
     for teacher in teachers:
         if teacher['ID'] == teacher_id:
@@ -214,7 +345,6 @@ def _is_same_teacher(db_operations, teacher_id: int, name: str) -> bool:
 
 
 def _is_same_module(db_operations, module_code: str, name: str) -> bool:
-    """Проверяет, относится ли имя к тому же модулю"""
     modules = db_operations.get_modules()
     for module in modules:
         if module['Код'] == module_code:
