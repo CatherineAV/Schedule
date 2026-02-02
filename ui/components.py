@@ -160,32 +160,25 @@ class Validator:
     def validate_group(group_name: str, subgroup: str) -> Optional[str]:
         if not group_name:
             return "Введите название группы"
-
         if not subgroup:
             return "Выберите подгруппу"
 
-        if not group_name.replace(' ', '').replace('-',
-                                                   '').replace('/', '').replace('(',
-                                                                                '').replace(')',
-                                                                                            '').isalnum():
+        if not group_name.replace(' ', '').replace('-', '').replace('/', '').replace('(', '').replace(')',
+                                                                                                      '').isalnum():
             return "Название группы может содержать только буквы, цифры, пробелы, дефисы, слэши и скобки"
 
-        if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()) and subgroup == "Нет":
-            return "Группы ХКО и ХБО должны иметь подгруппы"
-
-        if "ХБО" in group_name.upper() and subgroup not in ["Кукольники", "Бутафоры"]:
-            return "Для группы ХБО допустимые подгруппы: 'Кукольники' или 'Бутафоры'"
-
-        if "ХКО" in group_name.upper() and subgroup not in ["Женская", "Мужская"]:
-            return "Для группы ХКО допустимые подгруппы: 'Женская' или 'Мужская'"
-
-        if "ХКО" not in group_name.upper() and "ХБО" not in group_name.upper():
+        if ("ХКО" in group_name.upper() or "ХБО" in group_name.upper()):
+            if subgroup == "Нет":
+                return "Группы ХКО и ХБО должны иметь подгруппы"
+            if "ХБО" in group_name.upper() and subgroup not in ["Кукольники", "Бутафоры"]:
+                return "Для группы ХБО допустимые подгруппы: 'Кукольники' или 'Бутафоры'"
+            if "ХКО" in group_name.upper() and subgroup not in ["Женская", "Мужская"]:
+                return "Для группы ХКО допустимые подгруппы: 'Женская' или 'Мужская'"
+        else:
             if subgroup in ["Кукольники", "Бутафоры", "Женская", "Мужская"]:
                 return f"Подгруппа '{subgroup}' недопустима для обычных групп"
-
             if subgroup not in ["Нет", "1", "2", "3"]:
                 return "Для обычных групп допустимые подгруппы: 'Нет', '1', '2', '3'"
-
         return None
 
     @staticmethod
@@ -324,6 +317,22 @@ class Validator:
 
         if len(name) > 200:
             return "Название дисциплины не должно превышать 200 символов"
+
+        return None
+
+    @staticmethod
+    def validate_hours(hours: str) -> Optional[str]:
+        if not hours:
+            return "Введите количество часов"
+
+        try:
+            hours_int = int(hours)
+            if hours_int <= 0:
+                return "Часы должны быть положительным числом"
+            if hours_int > 40:
+                return "Часы не могут превышать 40 в неделю"
+        except ValueError:
+            return "Часы должны быть числом"
 
         return None
 
