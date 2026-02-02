@@ -1,9 +1,7 @@
 import flet as ft
 from database.operations import DBOperations
-from ui.components import Toast
+from ui.components import PALETTE, Toast
 from ui.pages import MainMenu
-
-PALETTE = ["#18363E", "#5F97AA", "#2D5F6E", "#3E88A5", "#93C4D1"]
 
 
 def main(page: ft.Page):
