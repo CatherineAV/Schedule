@@ -198,7 +198,7 @@ class Validator:
 
         try:
             day_blocks = preferences_str.split(';')
-            valid_days = ["пн", "вт", "ср", "чт", "пт", "сб"]
+            valid_days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб"]
 
             for block in day_blocks:
                 if ':' not in block:
