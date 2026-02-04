@@ -2,7 +2,8 @@ import flet as ft
 from typing import Callable, List, Dict, Any, Optional
 from database.operations import DBOperations
 from ui.components import Toast, DataTableManager, PALETTE, Validator
-from ui.forms import ModuleForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm, WorkloadForm
+from ui.forms import ModuleForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
+from ui.forms import MultiWorkloadForm, WorkloadForm
 
 
 class BasePage:
@@ -792,18 +793,31 @@ class DataPane(BasePage):
         self.page.update()
 
     def _render_workload_add_form(self):
-        def on_form_submit(workload_data):
-            success = self.db_ops.insert_workload(workload_data)
-            if success:
-                self.toast.show("Нагрузка успешно добавлена!", success=True)
+        def on_form_submit(workloads_data):
+            success_count = 0
+            error_count = 0
+
+            for workload_data in workloads_data:
+                success = self.db_ops.insert_workload(workload_data)
+                if success:
+                    success_count += 1
+                else:
+                    error_count += 1
+
+            if success_count > 0:
+                if error_count > 0:
+                    self.toast.show(f"Добавлено {success_count} из {len(workloads_data)} нагрузок. "
+                                    f"{error_count} не добавлено.", success=True)
+                else:
+                    self.toast.show(f"Успешно добавлено {success_count} нагрузок!", success=True)
                 self.render("Нагрузка")
             else:
-                self.toast.show("Ошибка при добавлении нагрузки!", success=False)
+                self.toast.show("Не удалось добавить ни одной нагрузки!", success=False)
 
         def on_form_cancel(e):
             self.render("Нагрузка")
 
-        workload_form = WorkloadForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        workload_form = MultiWorkloadForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
         workload_form.set_page(self.page)
 
         self.content.content = ft.Container(
