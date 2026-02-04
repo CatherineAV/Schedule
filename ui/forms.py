@@ -352,7 +352,7 @@ class SubjectForm:
                 options1.append(ft.dropdown.Option(territory_id, territory['Территория']))
         self.territory_dropdown1.options = options1
 
-        options2 = []
+        options2 = [ft.dropdown.Option("Нет", "Нет")]
         for territory in self.territories:
             territory_id = str(territory['ID'])
             if territory_id != selected_territory1:
@@ -372,6 +372,13 @@ class SubjectForm:
             self.page.update()
 
     def _on_territory2_change(self, e):
+        if self.territory_dropdown2.value == "Нет":
+            self._hide_territory2_classrooms()
+            self._update_territory_options()
+            if hasattr(self, 'page'):
+                self.page.update()
+            return
+
         if (self.territory_dropdown1.value and self.territory_dropdown2.value and
                 self.territory_dropdown1.value == self.territory_dropdown2.value):
             self.territory_dropdown1.value = None
@@ -424,7 +431,7 @@ class SubjectForm:
     def _load_classrooms_for_territory2(self):
         territory_id = self.territory_dropdown2.value
 
-        if not territory_id:
+        if not territory_id or territory_id == "Нет":
             self.classrooms_label2.visible = False
             self.classrooms_container2.visible = False
             self.no_classrooms_message2.visible = False
@@ -511,7 +518,7 @@ class SubjectForm:
                     self._load_classrooms_for_territory1()
                 elif self.territory_dropdown1.value == str(territory_id):
                     self._load_classrooms_for_territory1()
-                elif not self.territory_dropdown2.value:
+                elif not self.territory_dropdown2.value or self.territory_dropdown2.value == "Нет":
                     self.territory_dropdown2.value = str(territory_id)
                     self._load_classrooms_for_territory2()
                 elif self.territory_dropdown2.value == str(territory_id):
@@ -521,7 +528,7 @@ class SubjectForm:
 
         if self.territory_dropdown1.value:
             self._load_classrooms_for_territory1()
-        if self.territory_dropdown2.value:
+        if self.territory_dropdown2.value and self.territory_dropdown2.value != "Нет":
             self._load_classrooms_for_territory2()
 
     def _load_territories_from_classrooms(self, classroom_ids: List[int]):
@@ -536,12 +543,14 @@ class SubjectForm:
             self.territory_dropdown1.value = territory_ids_list[0]
         if len(territory_ids_list) > 1:
             self.territory_dropdown2.value = territory_ids_list[1]
+        else:
+            self.territory_dropdown2.value = "Нет"
 
         self._update_territory_options()
 
         if self.territory_dropdown1.value:
             self._load_classrooms_for_territory1()
-        if self.territory_dropdown2.value:
+        if self.territory_dropdown2.value and self.territory_dropdown2.value != "Нет":
             self._load_classrooms_for_territory2()
 
     def build(self) -> ft.Column:
@@ -572,8 +581,6 @@ class SubjectForm:
         territories_block.append(self.no_classrooms_message1)
         territories_block.append(self.classrooms_label1)
         territories_block.append(self.classrooms_container1)
-
-        territories_block.append(ft.Divider(height=20, color=PALETTE[1]))
 
         territories_block.extend([
             self.territory_dropdown2,
@@ -979,6 +986,8 @@ class TeacherForm:
                 self.territory_dropdown1.value = saved_territories[0]
             if len(saved_territories) > 1 and saved_territories[1]:
                 self.territory_dropdown2.value = saved_territories[1]
+            else:
+                self.territory_dropdown2.value = "Нет"
 
         self._update_territory_options()
 
@@ -993,12 +1002,12 @@ class TeacherForm:
         self.selected_days = saved_days.copy()
 
         days_of_week = [
-            ("пн", "Понедельник"),
-            ("вт", "Вторник"),
-            ("ср", "Среда"),
-            ("чт", "Четверг"),
-            ("пт", "Пятница"),
-            ("сб", "Суббота")
+            ("Пн", "Понедельник"),
+            ("Вт", "Вторник"),
+            ("Ср", "Среда"),
+            ("Чт", "Четверг"),
+            ("Пт", "Пятница"),
+            ("Сб", "Суббота")
         ]
 
         self.day_columns = []
@@ -1049,7 +1058,7 @@ class TeacherForm:
                 options1.append(ft.dropdown.Option(territory_id, territory['Территория']))
         self.territory_dropdown1.options = options1
 
-        options2 = []
+        options2 = [ft.dropdown.Option("Нет", "Нет")]
         for territory in self.territories:
             territory_id = str(territory['ID'])
             if territory_id != selected_territory1:
@@ -1067,6 +1076,12 @@ class TeacherForm:
             self.page.update()
 
     def _on_territory2_change(self, e):
+        if self.territory_dropdown2.value == "Нет":
+            self._update_territory_options()
+            if hasattr(self, 'page'):
+                self.page.update()
+            return
+
         if (self.territory_dropdown1.value and self.territory_dropdown2.value and
                 self.territory_dropdown1.value == self.territory_dropdown2.value):
             self.territory_dropdown1.value = None
@@ -1151,7 +1166,7 @@ class TeacherForm:
         territory_ids = []
         if territory1:
             territory_ids.append(int(territory1))
-        if territory2:
+        if territory2 and territory2 != "Нет":
             territory_ids.append(int(territory2))
 
         if self.edit_mode:
@@ -1556,6 +1571,351 @@ class WorkloadForm:
         }
 
         self.on_submit(workload_data)
+
+    def set_page(self, page: ft.Page):
+        self.page = page
+
+
+class MultiWorkloadForm:
+    def __init__(self, on_submit: Callable, on_cancel: Callable, db_operations, toast,
+                 edit_mode: bool = False, teacher_data: Optional[Dict] = None):
+        self.on_submit = on_submit
+        self.on_cancel = on_cancel
+        self.db_operations = db_operations
+        self.toast = toast
+        self.edit_mode = edit_mode
+
+        self.workload_rows = []
+        self.max_rows = 25
+        self.current_rows = 1
+
+        self.teachers = self.db_operations.get_table_data("Преподаватели")
+        self.subjects = self.db_operations.get_subjects_with_module_names()
+        self.groups = self.db_operations.get_groups()
+
+        teacher_options = [ft.dropdown.Option(t['ФИО'], t['ФИО']) for t in self.teachers]
+
+        self.teacher_dropdown = ft.Dropdown(
+            label="Преподаватель *",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=teacher_options,
+            value=teacher_data['ФИО'] if teacher_data and edit_mode else '',
+        )
+
+        self.workload_rows_container = ft.Column(
+            spacing=10,
+            scroll=ft.ScrollMode.AUTO
+        )
+
+        self.add_row_button = ft.ElevatedButton(
+            "➕ Добавить нагрузку",
+            icon=ft.Icons.ADD,
+            style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=15),
+            on_click=self._add_workload_row,
+            tooltip=f"Максимум {self.max_rows} строк"
+        )
+
+        self._add_initial_row()
+
+        self.no_teachers_message = ft.Text(
+            "Сначала добавьте преподавателей",
+            size=14,
+            color=ft.Colors.ORANGE_700,
+            visible=len(self.teachers) == 0
+        )
+
+        self.no_subjects_message = ft.Text(
+            "Сначала добавьте дисциплины",
+            size=14,
+            color=ft.Colors.ORANGE_700,
+            visible=len(self.subjects) == 0
+        )
+
+        self.no_groups_message = ft.Text(
+            "Сначала добавьте группы",
+            size=14,
+            color=ft.Colors.ORANGE_700,
+            visible=len(self.groups) == 0
+        )
+
+    def _add_initial_row(self):
+        self._create_workload_row()
+
+    def _create_workload_row(self, row_data: Optional[Dict] = None):
+        row_id = len(self.workload_rows)
+
+        subject_options = [ft.dropdown.Option(s['Дисциплина'], s['Дисциплина']) for s in self.subjects]
+        subject_dropdown = ft.Dropdown(
+            label="Дисциплина *",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=subject_options,
+            value=row_data.get('Дисциплина', '') if row_data else '',
+        )
+
+        group_options = []
+        for group in self.groups:
+            group_name = group['Группа']
+            subgroup = group['Подгруппа']
+            if subgroup and subgroup != "Нет" and subgroup != "None":
+                display_name = f"{group_name} - {subgroup}"
+            else:
+                display_name = group_name
+            group_options.append(ft.dropdown.Option(display_name, display_name))
+
+        group_dropdown = ft.Dropdown(
+            label="Группа *",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=group_options,
+            value=row_data.get('Группа', '') if row_data else '',
+        )
+
+        hours_field = ft.TextField(
+            label="Часы в неделю *",
+            expand=True,
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            value=str(row_data.get('Часы в неделю', '')) if row_data else '',
+            keyboard_type=ft.KeyboardType.NUMBER,
+        )
+
+        delete_button = ft.IconButton(
+            icon=ft.Icons.DELETE,
+            icon_color=ft.Colors.RED_400,
+            tooltip="Удалить строку",
+            visible=row_id > 0,
+            data=row_id,
+            on_click=self._delete_workload_row
+        )
+
+        delete_container = ft.Container(
+            content=delete_button,
+            width=50,
+            alignment=ft.alignment.center
+        )
+
+        row = ft.Row(
+            controls=[
+                ft.Container(
+                    content=subject_dropdown,
+                    expand=True,
+                    margin=ft.margin.only(right=5)
+                ),
+                ft.Container(
+                    content=group_dropdown,
+                    expand=True,
+                    margin=ft.margin.only(right=5)
+                ),
+                ft.Container(
+                    content=hours_field,
+                    expand=True,
+                    margin=ft.margin.only(right=5)
+                ),
+                delete_container
+            ],
+            spacing=0,
+            expand=True,
+            alignment=ft.MainAxisAlignment.START
+        )
+
+        row_data = {
+            'id': row_id,
+            'row': row,
+            'subject_dropdown': subject_dropdown,
+            'group_dropdown': group_dropdown,
+            'hours_field': hours_field,
+            'delete_button': delete_button
+        }
+
+        self.workload_rows.append(row_data)
+        self.workload_rows_container.controls.append(row)
+
+        self._update_add_button_state()
+
+    def _add_workload_row(self, e):
+        if self.current_rows >= self.max_rows:
+            self.toast.show(f"Достигнут максимум {self.max_rows} строк нагрузки!", success=False)
+            return
+
+        self._create_workload_row()
+        self.current_rows += 1
+
+        if hasattr(self, 'page'):
+            self.page.update()
+
+    def _delete_workload_row(self, e):
+        delete_button = e.control
+
+        row_to_delete = None
+        for i, row_data in enumerate(self.workload_rows):
+            if row_data['delete_button'] == delete_button:
+                row_to_delete = i
+                break
+
+        if row_to_delete is None:
+            return
+
+        if row_to_delete == 0:
+            self.toast.show("Первая строка не может быть удалена!", success=False)
+            return
+
+        self.workload_rows_container.controls.pop(row_to_delete)
+        self.workload_rows.pop(row_to_delete)
+
+        for i, row_data in enumerate(self.workload_rows):
+            row_data['id'] = i
+            row_data['delete_button'].visible = i > 0
+            row_data['delete_button'].data = i
+
+        self.current_rows -= 1
+        self._update_add_button_state()
+
+        if hasattr(self, 'page'):
+            self.page.update()
+
+    def _update_add_button_state(self):
+        if self.current_rows >= self.max_rows:
+            self.add_row_button.disabled = True
+            self.add_row_button.tooltip = f"Достигнут максимум {self.max_rows} строк"
+        else:
+            self.add_row_button.disabled = False
+            self.add_row_button.tooltip = f"Максимум {self.max_rows} строк"
+
+    def build(self) -> ft.Column:
+        title = "Добавить нагрузку преподавателю"
+
+        scrollable_content = ft.Column([
+            ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=10, color=PALETTE[1]),
+
+            ft.Text("Преподаватель", size=16, weight="bold", color=PALETTE[2]),
+            self.no_teachers_message,
+            self.teacher_dropdown,
+
+            ft.Divider(height=20, color=PALETTE[1]),
+
+            ft.Text("Нагрузка преподавателя", size=16, weight="bold", color=PALETTE[2]),
+            self.no_subjects_message,
+            self.no_groups_message,
+
+            self.workload_rows_container,
+
+            ft.Container(
+                content=self.add_row_button,
+                padding=ft.padding.only(top=10)
+            ),
+
+            ft.Text(f"* Обязательные поля. Можно добавить до {self.max_rows} строк нагрузки.",
+                    size=12, color=ft.Colors.BLUE_700, italic=True)
+        ], spacing=15)
+
+        buttons_container = ft.Container(
+            content=ft.Row([
+                ft.ElevatedButton(
+                    "Сохранить",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
+                    on_click=self._on_form_submit
+                ),
+                ft.ElevatedButton(
+                    "Отмена",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                    on_click=self.on_cancel
+                )
+            ], alignment=ft.MainAxisAlignment.END, spacing=20),
+            padding=ft.padding.only(top=20),
+            border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
+        )
+
+        return ft.Column([
+            ft.Container(
+                content=ft.ListView(
+                    [scrollable_content],
+                    expand=True,
+                    spacing=0,
+                    padding=0
+                ),
+                expand=True
+            ),
+            buttons_container
+        ], expand=True)
+
+    def _on_form_submit(self, e):
+        teacher = self.teacher_dropdown.value
+
+        if not teacher:
+            self.toast.show("Выберите преподавателя!", success=False)
+            return
+
+        workloads_data = []
+        errors = []
+
+        for i, row_data in enumerate(self.workload_rows):
+            subject = row_data['subject_dropdown'].value
+            group_display = row_data['group_dropdown'].value
+            hours_str = row_data['hours_field'].value.strip()
+
+            if not subject:
+                errors.append(f"Строка {i + 1}: выберите дисциплину")
+                continue
+
+            if not group_display:
+                errors.append(f"Строка {i + 1}: выберите группу")
+                continue
+
+            if not hours_str:
+                errors.append(f"Строка {i + 1}: введите количество часов")
+                continue
+
+            try:
+                hours = int(hours_str)
+                if hours <= 0:
+                    errors.append(f"Строка {i + 1}: часы должны быть положительным числом")
+                    continue
+                if hours > 40:
+                    errors.append(f"Строка {i + 1}: часы не могут превышать 40 в неделю")
+                    continue
+            except ValueError:
+                errors.append(f"Строка {i + 1}: часы должны быть числом")
+                continue
+
+            if ' - ' in group_display:
+                parts = group_display.split(' - ')
+                group_name = parts[0].strip()
+                subgroup = parts[1].strip()
+            else:
+                group_name = group_display
+                subgroup = "Нет"
+
+            workload_data = {
+                'Преподаватель': teacher,
+                'Дисциплина': subject,
+                'Группа': group_name,
+                'Подгруппа': subgroup,
+                'Часы в неделю': hours
+            }
+
+            workloads_data.append(workload_data)
+
+        if errors:
+            for error in errors[:3]:
+                self.toast.show(error, success=False)
+            if len(errors) > 3:
+                self.toast.show(f"... и еще {len(errors) - 3} ошибок", success=False)
+            return
+
+        if not workloads_data:
+            self.toast.show("Добавьте хотя бы одну строку нагрузки!", success=False)
+            return
+
+        self.on_submit(workloads_data)
 
     def set_page(self, page: ft.Page):
         self.page = page
