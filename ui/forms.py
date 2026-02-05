@@ -1,6 +1,6 @@
 import flet as ft
 import re
-from typing import Callable, List, Dict, Optional, Any
+from typing import Callable, List, Dict, Optional
 from ui.components import PALETTE, Validator
 
 
@@ -270,10 +270,12 @@ class SubjectForm:
             on_change=self._on_territory1_change
         )
 
-        self.classrooms_container1 = ft.Row(
+        self.classrooms_container1 = ft.GridView(
+            runs_count=4,
             spacing=10,
             run_spacing=10,
-            alignment=ft.MainAxisAlignment.START,
+            child_aspect_ratio=3,
+            max_extent=100,
             visible=False
         )
 
@@ -301,10 +303,12 @@ class SubjectForm:
             on_change=self._on_territory2_change
         )
 
-        self.classrooms_container2 = ft.Row(
+        self.classrooms_container2 = ft.GridView(
+            runs_count=4,
             spacing=10,
             run_spacing=10,
-            alignment=ft.MainAxisAlignment.START,
+            child_aspect_ratio=3,
+            max_extent=100,
             visible=False
         )
 
@@ -406,7 +410,6 @@ class SubjectForm:
             self.classrooms_label1.visible = True
             self.classrooms_container1.visible = True
             self.no_classrooms_message1.visible = False
-
             self.classrooms_container1.controls.clear()
 
             for classroom in classrooms:
@@ -1229,7 +1232,6 @@ class TerritoryForm:
             color=PALETTE[2],
             width=200,
             on_change=self._on_hex_change,
-            # prefix_text="#"
         )
 
         self.preset_colors = [

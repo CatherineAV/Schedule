@@ -1,7 +1,7 @@
 import flet as ft
-from typing import Callable, List, Dict, Any, Optional
+from typing import List, Dict
 from database.operations import DBOperations
-from ui.components import Toast, DataTableManager, PALETTE, Validator
+from ui.components import Toast, DataTableManager, PALETTE
 from ui.forms import ModuleForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
 from ui.forms import MultiWorkloadForm, WorkloadForm
 
