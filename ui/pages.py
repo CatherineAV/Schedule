@@ -163,31 +163,22 @@ class DataPane(BasePage):
 
         selected_row = self.table_manager.get_selected_row(section_name)
 
-        delete_button_style = ft.ButtonStyle(
-            bgcolor=ft.Colors.RED_400 if selected_row is not None else ft.Colors.GREY_400,
-            color="white",
-            padding=16,
-            shape=ft.CircleBorder()
-        )
-
-        edit_button_style = ft.ButtonStyle(
-            bgcolor=PALETTE[3] if selected_row is not None else ft.Colors.GREY_400,
-            color="white",
-            padding=16,
-            shape=ft.CircleBorder()
-        )
-
         def on_row_select(index):
             refresh_table()
 
         def refresh_table():
             selected_row = self.table_manager.get_selected_row(section_name)
 
-            delete_button_style.bgcolor = ft.Colors.RED_400 if selected_row is not None else ft.Colors.GREY_400
-            edit_button_style.bgcolor = PALETTE[3] if selected_row is not None else ft.Colors.GREY_400
+            if selected_row is not None:
+                edit_button.bgcolor = PALETTE[3]
+                delete_button.bgcolor = ft.Colors.RED_400
+            else:
+                edit_button.bgcolor = ft.Colors.GREY_400
+                delete_button.bgcolor = ft.Colors.GREY_400
 
             data_table = self.table_manager.create_data_table(data, columns, section_name, on_row_select)
             table_scroll.controls = [data_table]
+
             self.page.update()
 
         def delete_selected_record(e):
@@ -285,30 +276,28 @@ class DataPane(BasePage):
             auto_scroll=False
         )
 
-        edit_button = ft.ElevatedButton(
-            text="✏️",
-            style=edit_button_style,
-            on_click=edit_selected_record,
-            tooltip="Редактировать выбранную запись"
-        )
-
-        delete_button = ft.ElevatedButton(
-            text="🗑️",
-            style=delete_button_style,
-            on_click=delete_selected_record,
-            tooltip="Удалить выбранную запись"
-        )
-
-        add_button = ft.ElevatedButton(
-            text="🞢",
-            style=ft.ButtonStyle(
-                bgcolor=PALETTE[3],
-                color="white",
-                padding=16,
-                shape=ft.CircleBorder()
-            ),
+        add_button = ft.IconButton(
+            icon=ft.Icons.ADD,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=PALETTE[3],
+            tooltip="Добавить запись",
             on_click=lambda e: self._render_add_form(section_name, columns),
-            tooltip="Добавить запись"
+        )
+
+        edit_button = ft.IconButton(
+            icon=ft.Icons.EDIT,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=PALETTE[3] if selected_row is not None else ft.Colors.GREY_400,
+            tooltip="Редактировать выбранную запись",
+            on_click=edit_selected_record,
+        )
+
+        delete_button = ft.IconButton(
+            icon=ft.Icons.DELETE,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=ft.Colors.RED_400 if selected_row is not None else ft.Colors.GREY_400,
+            tooltip="Удалить выбранную запись",
+            on_click=delete_selected_record,
         )
 
         self.content.content = ft.Column([

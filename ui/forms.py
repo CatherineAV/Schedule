@@ -1611,7 +1611,7 @@ class MultiWorkloadForm:
         )
 
         self.add_row_button = ft.ElevatedButton(
-            "➕ Добавить нагрузку",
+            "Добавить нагрузку",
             icon=ft.Icons.ADD,
             style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=15),
             on_click=self._add_workload_row,
