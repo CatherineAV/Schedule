@@ -1921,3 +1921,341 @@ class MultiWorkloadForm:
 
     def set_page(self, page: ft.Page):
         self.page = page
+
+
+class StreamForm:
+    def __init__(self, on_submit: Callable, on_cancel: Callable, db_operations, toast,
+                 edit_mode: bool = False, stream_data: Optional[Dict] = None):
+        self.on_submit = on_submit
+        self.on_cancel = on_cancel
+        self.db_operations = db_operations
+        self.toast = toast
+        self.edit_mode = edit_mode
+        self.original_stream_name = stream_data['Название'] if stream_data and edit_mode else ""
+
+        all_groups = self.db_operations.get_groups()
+
+        all_subjects = self.db_operations.get_subjects_with_module_names()
+
+        self.group_options = []
+        for group in all_groups:
+            group_name = group['Группа']
+            subgroup = group['Подгруппа']
+            if subgroup and subgroup != 'Нет' and subgroup != 'None':
+                display_name = f"{group_name} - {subgroup}"
+            else:
+                display_name = group_name
+            self.group_options.append(
+                ft.dropdown.Option(
+                    str(group['ID']),
+                    display_name
+                )
+            )
+
+        self.subject_options = []
+        for subject in all_subjects:
+            self.subject_options.append(
+                ft.dropdown.Option(
+                    str(subject['ID']),
+                    subject['Дисциплина']
+                )
+            )
+
+        self.stream_name_field = ft.TextField(
+            label="Название потока",
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            value=stream_data['Название'] if stream_data and edit_mode else "",
+        )
+
+        self.group1_dropdown = ft.Dropdown(
+            label="Группа 1 *",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=self.group_options.copy(),
+            value=str(stream_data.get('Группа1_ID', '')) if stream_data and edit_mode and stream_data.get(
+                'Группа1_ID') else None,
+        )
+
+        self.group2_dropdown = ft.Dropdown(
+            label="Группа 2 *",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=self.group_options.copy(),
+            value=str(stream_data.get('Группа2_ID', '')) if stream_data and edit_mode and stream_data.get(
+                'Группа2_ID') else None,
+        )
+
+        self.group3_dropdown = ft.Dropdown(
+            label="Группа 3 (необязательно)",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=self.group_options.copy(),
+            value=str(stream_data.get('Группа3_ID', '')) if stream_data and edit_mode and stream_data.get(
+                'Группа3_ID') else None,
+        )
+
+        self.subjects_dropdown = ft.Dropdown(
+            label="Дисциплины для объединения *",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=self.subject_options.copy(),
+            hint_text="Выберите дисциплины...",
+        )
+
+        self.selected_subjects_container = ft.Column(
+            spacing=5,
+            visible=False
+        )
+
+        self.selected_subjects = []
+        self.selected_subject_ids = []
+
+        if edit_mode and stream_data:
+            subject_ids = stream_data.get('Дисциплины_ID', [])
+            subject_names = stream_data.get('Дисциплины_список', [])
+            self._update_selected_subjects_display()
+
+            self.selected_subject_ids = subject_ids
+            self.selected_subjects = subject_names
+
+            self._update_selected_subjects_display()
+
+            current_subject_options = []
+            for option in self.subject_options:
+                subject_id = int(option.key)
+                if subject_id in subject_ids:
+                    continue
+                current_subject_options.append(option)
+
+            self.subjects_dropdown.options = current_subject_options
+
+        self.no_groups_message = ft.Text(
+            "Сначала добавьте группы в разделе 'Группы'",
+            size=14,
+            color=ft.Colors.ORANGE_700,
+            visible=len(all_groups) == 0
+        )
+
+        self.no_subjects_message = ft.Text(
+            "Сначала добавьте дисциплины в разделе 'Дисциплины'",
+            size=14,
+            color=ft.Colors.ORANGE_700,
+            visible=len(all_subjects) == 0
+        )
+
+    def _update_selected_subjects_display(self):
+        if not self.selected_subjects:
+            self.selected_subjects_container.visible = False
+            if hasattr(self, 'selected_subjects_label'):
+                self.selected_subjects_label.visible = False
+            return
+
+        self.selected_subjects_container.controls.clear()
+
+        for i, subject_name in enumerate(self.selected_subjects):
+            chip = ft.Chip(
+                label=ft.Text(subject_name, color=PALETTE[2]),
+                bgcolor=PALETTE[4],
+                on_delete=lambda e, idx=i: self._remove_subject(idx),
+                delete_icon_color=PALETTE[2]
+            )
+            self.selected_subjects_container.controls.append(chip)
+
+        self.selected_subjects_container.visible = True
+        if hasattr(self, 'selected_subjects_label'):
+            self.selected_subjects_label.visible = True
+
+    def _remove_subject(self, index):
+        if 0 <= index < len(self.selected_subjects):
+            removed_subject_id = self.selected_subject_ids[index]
+            removed_subject_name = self.selected_subjects[index]
+
+            self.selected_subjects.pop(index)
+            self.selected_subject_ids.pop(index)
+            option = ft.dropdown.Option(
+                str(removed_subject_id),
+                removed_subject_name
+            )
+            self.subjects_dropdown.options.append(option)
+
+            self._update_selected_subjects_display()
+
+            if hasattr(self, 'page'):
+                self.page.update()
+
+    def build(self) -> ft.Column:
+        title = "Редактировать поток" if self.edit_mode else "Добавить поток"
+
+        scrollable_content = ft.Column([
+            ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=10, color=PALETTE[1]),
+
+            ft.Text("Основная информация", size=16, weight="bold", color=PALETTE[2]),
+            self.stream_name_field,
+
+            ft.Divider(height=20, color=PALETTE[1]),
+
+            ft.Text("Группы в потоке", size=16, weight="bold", color=PALETTE[2]),
+            ft.Text("Можно объединить от 1 до 3 групп",
+                    size=12, color=ft.Colors.BLUE_700, italic=True),
+            self.no_groups_message,
+            self.group1_dropdown,
+            self.group2_dropdown,
+            self.group3_dropdown,
+
+            ft.Divider(height=20, color=PALETTE[1]),
+
+            ft.Text("Дисциплины для объединения", size=16, weight="bold", color=PALETTE[2]),
+            ft.Text("Выберите дисциплины, на которых эти группы объединяются в поток",
+                    size=12, color=ft.Colors.BLUE_700, italic=True),
+            self.no_subjects_message,
+
+            ft.Text("Выбранные дисциплины:",
+                    size=14, color=PALETTE[2], weight="bold",
+                    visible=bool(self.selected_subjects)),
+            self.selected_subjects_container,
+
+            ft.Row([
+                self.subjects_dropdown,
+                ft.IconButton(
+                    icon=ft.Icons.ADD,
+                    icon_color=ft.Colors.WHITE,
+                    bgcolor=PALETTE[3],
+                    tooltip="Добавить дисциплину",
+                    on_click=self._add_subject
+                )
+            ], spacing=10),
+        ], spacing=15)
+
+        buttons_container = ft.Container(
+            content=ft.Row([
+                ft.ElevatedButton(
+                    "Сохранить",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
+                    on_click=self._on_form_submit
+                ),
+                ft.ElevatedButton(
+                    "Отмена",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                    on_click=self.on_cancel
+                )
+            ], alignment=ft.MainAxisAlignment.END, spacing=20),
+            padding=ft.padding.only(top=20),
+            border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
+        )
+
+        return ft.Column([
+            ft.Container(
+                content=ft.ListView(
+                    [scrollable_content],
+                    expand=True,
+                    spacing=0,
+                    padding=0
+                ),
+                expand=True
+            ),
+            buttons_container
+        ], expand=True)
+
+    def _add_subject(self, e):
+        if not self.subjects_dropdown.value:
+            self.toast.show("Выберите дисциплину!", success=False)
+            return
+
+        subject_id = int(self.subjects_dropdown.value)
+
+        subject_name = None
+        for option in self.subject_options:
+            if option.key == self.subjects_dropdown.value:
+                subject_name = option.text
+                break
+
+        if not subject_name:
+            return
+
+        if subject_id in self.selected_subject_ids:
+            self.toast.show("Эта дисциплина уже добавлена!", success=False)
+            return
+
+        self.selected_subject_ids.append(subject_id)
+        self.selected_subjects.append(subject_name)
+
+        self._update_selected_subjects_display()
+
+        self.subjects_dropdown.value = None
+
+        if hasattr(self, 'page'):
+            self.page.update()
+
+    def _on_form_submit(self, e):
+        stream_name = self.stream_name_field.value.strip()
+        group1_id = self.group1_dropdown.value
+        group2_id = self.group2_dropdown.value
+        group3_id = self.group3_dropdown.value
+
+        # Валидация
+        if not stream_name:
+            self.toast.show("Введите название потока!", success=False)
+            return
+
+        if not group1_id or not group2_id:
+            self.toast.show("Выберите первую и вторую группу!", success=False)
+            return
+
+        if not self.selected_subject_ids:
+            self.toast.show("Выберите хотя бы одну дисциплину для объединения!", success=False)
+            return
+
+        group_ids = []
+        if group1_id and group1_id != 'None':
+            try:
+                group_ids.append(int(group1_id))
+            except ValueError:
+                self.toast.show(f"Некорректный ID группы 1: {group1_id}", success=False)
+                return
+
+        if group2_id and group2_id != 'None':
+            try:
+                group_ids.append(int(group2_id))
+            except ValueError:
+                self.toast.show(f"Некорректный ID группы 2: {group2_id}", success=False)
+                return
+
+        if group3_id and group3_id != 'None':
+            try:
+                group_ids.append(int(group3_id))
+            except ValueError:
+                self.toast.show(f"Некорректный ID группы 3: {group3_id}", success=False)
+                return
+
+        if len(set(group_ids)) != len(group_ids):
+            self.toast.show("Группы не должны повторяться в потоке!", success=False)
+            return
+
+        stream_data = {
+            'Название': stream_name,
+            'Группы_список': group_ids,
+            'Дисциплины_ID': self.selected_subject_ids,
+            'Дисциплины_список': self.selected_subjects
+        }
+
+        if len(group_ids) > 0:
+            stream_data['Группа1_ID'] = group_ids[0]
+        if len(group_ids) > 1:
+            stream_data['Группа2_ID'] = group_ids[1]
+        if len(group_ids) > 2:
+            stream_data['Группа3_ID'] = group_ids[2]
+
+        self.on_submit(stream_data)
+
+    def set_page(self, page: ft.Page):
+        self.page = page

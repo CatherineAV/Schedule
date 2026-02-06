@@ -1,9 +1,10 @@
 import flet as ft
 from typing import List, Dict
 from database.operations import DBOperations
+from database.settings_manager import SettingsManager
 from ui.components import Toast, DataTableManager, PALETTE
-from ui.forms import ModuleForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
-from ui.forms import MultiWorkloadForm, WorkloadForm
+from ui.forms import ModuleForm
+from ui.forms import MultiWorkloadForm, WorkloadForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
 
 
 class BasePage:
@@ -42,7 +43,9 @@ class MainMenu(BasePage):
         ])
 
         self.content.content = ft.Column([
-            ft.Text("Добро пожаловать! Выберите пункт меню.", size=16, color=PALETTE[0])
+            ft.Text("Добро пожаловать!", size=20, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Text("Выберите пункт из меню слева", size=16, color=PALETTE[0])
         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
         self.page.update()
@@ -52,10 +55,8 @@ class MainMenu(BasePage):
         data_menu.render()
 
     def _on_settings_click(self, e):
-        self.content.content = ft.Column([
-            ft.Text("Настройки генерации.", size=16, color=PALETTE[0])
-        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-        self.page.update()
+        settings_page = SettingsPage(self.menu_column, self.content, self.page, self.db_ops, self.toast)
+        settings_page.render()
 
     def _on_generate_click(self, e):
         self.content.content = ft.Column([
@@ -120,7 +121,9 @@ class DataMenu(BasePage):
         ])
 
         self.content.content = ft.Column([
-            ft.Text("Раздел Данные. Выберите, что просматривать.", size=16, color=PALETTE[0])
+            ft.Text("Управления данными расписания", size=20, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Text("Выберите раздел данных из меню слева", size=16, color=PALETTE[0])
         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
         self.page.update()
@@ -949,3 +952,218 @@ class DataPane(BasePage):
             "Модули": "Модуль"
         }
         return names.get(table_name, table_name)
+
+
+class SettingsPage(BasePage):
+    def render(self):
+        self.menu_column.controls.clear()
+        self.menu_column.controls.extend([
+            ft.ElevatedButton(
+                "Назад",
+                icon=ft.Icons.ARROW_BACK,
+                style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                on_click=self._on_back_click
+            ),
+            ft.Divider(height=20, color=ft.Colors.WHITE),
+            ft.ElevatedButton(
+                "Потоки групп",
+                icon=ft.Icons.MERGE,
+                style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                on_click=lambda e: self._show_streams_section()
+            ),
+            ft.ElevatedButton(
+                "Параметры генерации",
+                icon=ft.Icons.TUNE,
+                style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                on_click=lambda e: self._show_generation_params()
+            ),
+        ])
+
+        self._show_main_settings()
+        self.page.update()
+
+    def _on_back_click(self, e):
+        main_menu = MainMenu(self.menu_column, self.content, self.page, self.db_ops, self.toast)
+        main_menu.render()
+
+    def _show_main_settings(self):
+        self.content.content = ft.Column([
+            ft.Text("Настройки генерации расписания", size=20, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Text("Выберите раздел настроек из меню слева", size=16, color=PALETTE[0])
+        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
+    def _show_streams_section(self):
+        settings_manager = SettingsManager(self.db_ops)
+
+        streams = settings_manager.get_streams_with_subjects()
+
+        columns = ["ID", "Название", "Группы", "Дисциплины"]
+        data_table = self.table_manager.create_data_table(
+            streams,
+            columns,
+            "Потоки",
+            lambda index: self._on_stream_select(index)
+        )
+
+        add_button = ft.IconButton(
+            icon=ft.Icons.ADD,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=PALETTE[3],
+            tooltip="Добавить поток",
+            on_click=lambda e: self._render_add_stream_form(settings_manager),
+        )
+
+        edit_button = ft.IconButton(
+            icon=ft.Icons.EDIT,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=ft.Colors.GREY_400,
+            tooltip="Редактировать выбранный поток",
+            on_click=lambda e: self._edit_selected_stream(settings_manager),
+        )
+
+        delete_button = ft.IconButton(
+            icon=ft.Icons.DELETE,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=ft.Colors.GREY_400,
+            tooltip="Удалить выбранный поток",
+            on_click=lambda e: self._delete_selected_stream(settings_manager),
+        )
+
+        self.content.content = ft.Column([
+            ft.Row([
+                ft.Text("Потоки групп", size=20, weight="bold", color=PALETTE[2]),
+                ft.Row([add_button, edit_button, delete_button], spacing=10)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+
+            ft.Divider(height=20, color=PALETTE[1]),
+
+            ft.Container(
+                content=ft.ListView([data_table], expand=True),
+                expand=True,
+                padding=10,
+                border=ft.border.all(1, color=PALETTE[1]),
+                border_radius=5,
+            )
+        ], expand=True)
+
+        self.page.update()
+
+    def _show_generation_params(self):
+        self.content.content = ft.Column([
+            ft.Text("Параметры генерации", size=20, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Text("Настройки генерации расписания будут здесь", size=16, color=PALETTE[0])
+        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
+    def _render_add_stream_form(self, settings_manager):
+        from ui.forms import StreamForm
+
+        def on_form_submit(stream_data):
+            try:
+                success = settings_manager.save_stream(
+                    stream_data['Название'],
+                    stream_data['Группы_список']
+                )
+                if success:
+                    self.toast.show("Поток успешно добавлен!", success=True)
+                    self._show_streams_section()
+                else:
+                    self.toast.show("Ошибка при добавлении потока!", success=False)
+            except ValueError as e:
+                self.toast.show(str(e), success=False)
+
+        def on_form_cancel(e):
+            self._show_streams_section()
+
+        stream_form = StreamForm(on_form_submit, on_form_cancel, self.db_ops, self.toast)
+        stream_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=stream_form.build(),
+            padding=20,
+            expand=True
+        )
+        self.page.update()
+
+    def _on_stream_select(self, index):
+        self._show_streams_section()
+
+    def _edit_selected_stream(self, settings_manager):
+        selected_row = self.table_manager.get_selected_row("Потоки")
+        if selected_row is None:
+            self.toast.show("Выберите поток для редактирования!", success=False)
+            return
+
+        streams = settings_manager.get_streams()
+        stream = streams[selected_row]
+
+        def on_form_submit(stream_data):
+            try:
+                success = settings_manager.update_stream(
+                    stream['ID'],
+                    stream_data['Название'],
+                    stream_data['Группы_список']
+                )
+                if success:
+                    self.toast.show("Поток успешно обновлен!", success=True)
+                    self._show_streams_section()
+                else:
+                    self.toast.show("Ошибка при обновлении потока!", success=False)
+            except ValueError as e:
+                self.toast.show(str(e), success=False)
+
+        def on_form_cancel(e):
+            self._show_streams_section()
+
+        from ui.forms import StreamForm
+        stream_form = StreamForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
+                                 edit_mode=True, stream_data=stream)
+        stream_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=stream_form.build(),
+            padding=20,
+            expand=True
+        )
+        self.page.update()
+
+    def _delete_selected_stream(self, settings_manager):
+        selected_row = self.table_manager.get_selected_row("Потоки")
+        if selected_row is None:
+            self.toast.show("Выберите поток для удаления!", success=False)
+            return
+
+        streams = settings_manager.get_streams()
+        stream = streams[selected_row]
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Подтверждение удаления"),
+            content=ft.Text(f"Вы уверены, что хотите удалить поток '{stream['Название']}'?"),
+            actions=[]
+        )
+
+        def on_confirm_delete(evt):
+            success = settings_manager.delete_stream(stream['ID'])
+            if success:
+                self.toast.show("Поток успешно удален!", success=True)
+                self.table_manager.clear_selection("Потоки")
+                self._show_streams_section()
+            else:
+                self.toast.show("Ошибка при удалении потока!", success=False)
+            dialog.open = False
+            self.page.update()
+
+        def on_cancel_delete(evt):
+            dialog.open = False
+            self.page.update()
+
+        dialog.actions = [
+            ft.TextButton("Да", on_click=on_confirm_delete),
+            ft.TextButton("Нет", on_click=on_cancel_delete)
+        ]
+
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
