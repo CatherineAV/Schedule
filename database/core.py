@@ -102,6 +102,32 @@ class Database:
                 FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID),
                 FOREIGN KEY (ГруппаID) REFERENCES Группы(ID)
             );
+            
+            CREATE TABLE IF NOT EXISTS Настройки (
+                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                Ключ TEXT NOT NULL UNIQUE,
+                Значение TEXT,
+                Тип TEXT DEFAULT 'TEXT'
+            );
+            
+            CREATE TABLE IF NOT EXISTS Потоки (
+                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                Название TEXT NOT NULL,
+                Группа1_ID INTEGER NOT NULL,
+                Группа2_ID INTEGER,
+                Группа3_ID INTEGER,
+                FOREIGN KEY (Группа1_ID) REFERENCES Группы(ID),
+                FOREIGN KEY (Группа2_ID) REFERENCES Группы(ID),
+                FOREIGN KEY (Группа3_ID) REFERENCES Группы(ID)
+            );
+            
+            CREATE TABLE IF NOT EXISTS Поток_Дисциплина (
+                ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                ПотокID INTEGER NOT NULL,
+                ДисциплинаID INTEGER NOT NULL,
+                FOREIGN KEY (ПотокID) REFERENCES Потоки(ID) ON DELETE CASCADE,
+                FOREIGN KEY (ДисциплинаID) REFERENCES Дисциплины(ID) ON DELETE CASCADE
+            );
             """)
 
     def _get_connection(self):
