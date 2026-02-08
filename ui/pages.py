@@ -341,6 +341,7 @@ class DataPane(BasePage):
             self._render_standard_add_form(table_name, columns)
 
     # ========== ФОРМЫ ДОБАВЛЕНИЯ ==========
+
     def _render_group_add_form(self):
         def on_form_submit(group_data):
             success = self.db_ops.insert_group(group_data)
