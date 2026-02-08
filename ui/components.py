@@ -55,6 +55,58 @@ class DataTableManager:
             "ФИО": "Преподаватель",
         }
 
+        def calculate_row_height(row_data):
+            max_lines = 1
+
+            for col in display_columns:
+                value = str(row_data.get(col, ""))
+
+                if col == "Разговоры о важном" or col == "[Разговоры о важном]":
+                    value = "Да" if value == "1" or value == "Да" or value == "1.0" else "Нет"
+                elif col == "Самообразование" and (not value or value == "None"):
+                    value = "Нет"
+                elif col == "Подгруппа" and (not value or value == "None"):
+                    value = "Нет"
+                elif col == "Совместитель":
+                    value = "Да" if value == "1" or value == "Да" or value == "1.0" else "Нет"
+                elif col == "Дни занятий" and (not value or value == "Любые" or value == "None"):
+                    value = "Любые"
+                elif col == "Территория" and (not value or value == "Не указана" or value == "None"):
+                    value = "Не указана"
+                elif (col == "Код модуля" or col == "Название модуля") and (value is None or value == "None"):
+                    value = ""
+                elif col == "Вместимость" and (value is None or value == "None" or value == ""):
+                    value = "Не указана"
+                elif col == "Часы в неделю" and (value is None or value == "None" or value == ""):
+                    value = "0"
+                elif col == "Преподаватель" and (not value or value == "None"):
+                    value = "Не указан"
+                elif col == "Дисциплина" and (not value or value == "None"):
+                    value = "Не указана"
+                elif col == "Группа" and (not value or value == "None"):
+                    value = "Не указана"
+
+                char_count = len(value)
+
+                if col in ["Дисциплина", "Преподаватель", "ФИО", "Название модуля", "Дисциплины", "Группы"]:
+                    chars_per_line = 40
+                else:
+                    chars_per_line = 60
+
+                lines_needed = max(1, (char_count // chars_per_line) + 1)
+
+                if lines_needed > max_lines:
+                    max_lines = lines_needed
+
+            row_height = max_lines * 20 + 20
+            return min(row_height, 300)
+
+        max_row_height = 40
+        for row in data:
+            row_height = calculate_row_height(row)
+            if row_height > max_row_height:
+                max_row_height = row_height
+
         for i, row in enumerate(data):
             cells = []
             for col in display_columns:
@@ -76,6 +128,17 @@ class DataTableManager:
                     value = ""
                 elif col == "Вместимость" and (value is None or value == "None" or value == ""):
                     value = "Не указана"
+                elif col == "Часы в неделю" and (value is None or value == "None" or value == ""):
+                    value = "0"
+                elif col == "Преподаватель" and (not value or value == "None"):
+                    value = "Не указан"
+                elif col == "Дисциплина" and (not value or value == "None"):
+                    value = "Не указана"
+                elif col == "Группа" and (not value or value == "None"):
+                    value = "Не указана"
+                elif col == "Подгруппа" and (not value or value == "None"):
+                    value = "Нет"
+
                 if col == "Цвет" and value:
                     color_container = ft.Container(
                         width=20,
@@ -105,7 +168,9 @@ class DataTableManager:
             rows=data_rows,
             expand=True,
             divider_thickness=0,
-            data_row_color={ft.ControlState.SELECTED: PALETTE[4]}
+            data_row_color={ft.ControlState.SELECTED: PALETTE[4]},
+            data_row_min_height=40,
+            data_row_max_height=max_row_height,
         )
 
     def _on_row_select(self, e, index: int, section_name: str, on_row_select: Callable):

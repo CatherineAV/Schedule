@@ -112,7 +112,7 @@ class Database:
             
             CREATE TABLE IF NOT EXISTS Потоки (
                 ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                Название TEXT NOT NULL,
+                Поток TEXT NOT NULL,
                 Группа1_ID INTEGER NOT NULL,
                 Группа2_ID INTEGER,
                 Группа3_ID INTEGER,

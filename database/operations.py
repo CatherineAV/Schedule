@@ -762,3 +762,23 @@ class DBOperations:
         except Exception as e:
             print(f"Ошибка при получении ID группы: {e}")
             return None
+
+    def check_workload_duplicate(self, teacher_id: int, subject_id: int, group_id: int,
+                                 exclude_id: Optional[int] = None) -> bool:
+        try:
+            if exclude_id:
+                result = self.db.execute_query(
+                    """SELECT COUNT(*) as count FROM Нагрузка 
+                       WHERE ПреподавательID = ? AND ДисциплинаID = ? AND ГруппаID = ? AND ID != ?""",
+                    (teacher_id, subject_id, group_id, exclude_id)
+                )
+            else:
+                result = self.db.execute_query(
+                    """SELECT COUNT(*) as count FROM Нагрузка 
+                       WHERE ПреподавательID = ? AND ДисциплинаID = ? AND ГруппаID = ?""",
+                    (teacher_id, subject_id, group_id)
+                )
+            return result[0]['count'] > 0 if result else False
+        except Exception as e:
+            print(f"Ошибка при проверке повторяющейся нагрузки: {e}")
+            return False

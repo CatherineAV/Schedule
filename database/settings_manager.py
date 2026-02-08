@@ -59,7 +59,7 @@ class SettingsManager:
         group3 = group_ids[2] if len(group_ids) > 2 else None
 
         return self.db_ops.db.execute_command(
-            """INSERT INTO Потоки (Название, Группа1_ID, Группа2_ID, Группа3_ID) 
+            """INSERT INTO Потоки (Поток, Группа1_ID, Группа2_ID, Группа3_ID) 
                VALUES (?, ?, ?, ?)""",
             (name, group1, group2, group3)
         )
@@ -90,7 +90,7 @@ class SettingsManager:
         query = """
             SELECT 
                 п.ID,
-                п.Название as Название_потока,
+                п.Поток as Поток,
                 г1.ID as Группа1_ID,
                 г1.Группа as Группа1_Название,
                 г1.Подгруппа as Группа1_Подгруппа,
@@ -134,7 +134,7 @@ class SettingsManager:
 
             result.append({
                 'ID': stream['ID'],
-                'Название': stream['Название_потока'],
+                'Поток': stream['Поток'],
                 'Группы': groups_display,
                 'Группа1_ID': stream['Группа1_ID'],
                 'Группа2_ID': stream['Группа2_ID'],
@@ -175,7 +175,7 @@ class SettingsManager:
             group3 = group_ids[2] if len(group_ids) > 2 else None
 
             cursor.execute(
-                """INSERT INTO Потоки (Название, Группа1_ID, Группа2_ID, Группа3_ID) 
+                """INSERT INTO Потоки (Поток, Группа1_ID, Группа2_ID, Группа3_ID) 
                    VALUES (?, ?, ?, ?)""",
                 (name, group1, group2, group3)
             )
@@ -214,7 +214,7 @@ class SettingsManager:
             group3 = group_ids[2] if len(group_ids) > 2 else None
 
             cursor.execute(
-                """UPDATE Потоки SET Название = ?, Группа1_ID = ?, Группа2_ID = ?, Группа3_ID = ?
+                """UPDATE Потоки SET Поток = ?, Группа1_ID = ?, Группа2_ID = ?, Группа3_ID = ?
                    WHERE ID = ?""",
                 (name, group1, group2, group3, stream_id)
             )
@@ -275,3 +275,70 @@ class SettingsManager:
             if stream['ID'] == stream_id:
                 return stream
         return None
+
+    # ========== УПРАВЛЕНИЕ ГРУППАМИ В РАСПИСАНИИ ==========
+    def get_excluded_groups(self) -> List[int]:
+        setting = self.get_setting("excluded_groups", [])
+        return setting if isinstance(setting, list) else []
+
+    def save_excluded_groups(self, group_ids: List[int]) -> bool:
+        return self.save_setting("excluded_groups", group_ids, "JSON")
+
+    def add_excluded_group(self, group_id: int) -> bool:
+        excluded = self.get_excluded_groups()
+        if group_id not in excluded:
+            excluded.append(group_id)
+            return self.save_excluded_groups(excluded)
+        return True
+
+    def remove_excluded_group(self, group_id: int) -> bool:
+        excluded = self.get_excluded_groups()
+        if group_id in excluded:
+            excluded.remove(group_id)
+            return self.save_excluded_groups(excluded)
+        return True
+
+    def is_group_excluded(self, group_id: int) -> bool:
+        return group_id in self.get_excluded_groups()
+
+    # ========== ПОСЛЕДОВАТЕЛЬНОСТЬ ГРУПП ==========
+    def get_group_order(self) -> List[int]:
+        setting = self.get_setting("group_order", [])
+        return setting if isinstance(setting, list) else []
+
+    def save_group_order(self, group_ids: List[int]) -> bool:
+        return self.save_setting("group_order", group_ids, "JSON")
+
+    def get_groups_with_exclusion_and_order(self) -> List[Dict[str, Any]]:
+        groups = self.db_ops.get_groups()
+        excluded = self.get_excluded_groups()
+        order = self.get_group_order()
+
+        order_dict = {group_id: index for index, group_id in enumerate(order)}
+
+        result = []
+        for group in groups:
+            group_id = group['ID']
+            result.append({
+                **group,
+                'Исключена': group_id in excluded,
+                'Порядок': order_dict.get(group_id, 999)
+            })
+
+        result.sort(key=lambda x: (x['Порядок'], x['Группа'], x['Подгруппа']))
+        return result
+
+    # ========== ПАРАМЕТРЫ ГЕНЕРАЦИИ ==========
+    def get_generation_params(self) -> Dict[str, Any]:
+        return {
+            'excluded_groups': self.get_excluded_groups(),
+            'group_order': self.get_group_order(),
+        }
+
+    def save_generation_params(self, params: Dict[str, Any]) -> bool:
+        success = True
+        if 'excluded_groups' in params:
+            success = success and self.save_excluded_groups(params['excluded_groups'])
+        if 'group_order' in params:
+            success = success and self.save_group_order(params['group_order'])
+        return success

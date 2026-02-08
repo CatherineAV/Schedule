@@ -1564,6 +1564,38 @@ class WorkloadForm:
             group_name = group_display
             subgroup = "Нет"
 
+        teacher_result = self.db_operations.db.execute_query(
+            "SELECT ID FROM Преподаватели WHERE ФИО = ?",
+            (teacher,)
+        )
+        if not teacher_result:
+            self.toast.show("Преподаватель не найден!", success=False)
+            return
+        teacher_id = teacher_result[0]['ID']
+
+        subject_result = self.db_operations.db.execute_query(
+            "SELECT ID FROM Дисциплины WHERE Дисциплина = ?",
+            (subject,)
+        )
+        if not subject_result:
+            self.toast.show("Дисциплина не найдена!", success=False)
+            return
+        subject_id = subject_result[0]['ID']
+
+        group_result = self.db_operations.db.execute_query(
+            "SELECT ID FROM Группы WHERE Группа = ? AND Подгруппа = ?",
+            (group_name, subgroup)
+        )
+        if not group_result:
+            self.toast.show("Группа не найдена!", success=False)
+            return
+        group_id = group_result[0]['ID']
+
+        workload_id = getattr(self, 'workload_id', None) if self.edit_mode else None
+        if self.db_operations.check_workload_duplicate(teacher_id, subject_id, group_id, workload_id):
+            self.toast.show(f"Такая нагрузка уже существует для преподавателя '{teacher}'!", success=False)
+            return
+
         workload_data = {
             'Преподаватель': teacher,
             'Дисциплина': subject,
@@ -1856,8 +1888,18 @@ class MultiWorkloadForm:
             self.toast.show("Выберите преподавателя!", success=False)
             return
 
+        teacher_result = self.db_operations.db.execute_query(
+            "SELECT ID FROM Преподаватели WHERE ФИО = ?",
+            (teacher,)
+        )
+        if not teacher_result:
+            self.toast.show("Преподаватель не найден!", success=False)
+            return
+        teacher_id = teacher_result[0]['ID']
+
         workloads_data = []
         errors = []
+        duplicates = []
 
         for i, row_data in enumerate(self.workload_rows):
             subject = row_data['subject_dropdown'].value
@@ -1896,15 +1938,52 @@ class MultiWorkloadForm:
                 group_name = group_display
                 subgroup = "Нет"
 
+            subject_result = self.db_operations.db.execute_query(
+                "SELECT ID FROM Дисциплины WHERE Дисциплина = ?",
+                (subject,)
+            )
+            if not subject_result:
+                errors.append(f"Строка {i + 1}: дисциплина '{subject}' не найдена")
+                continue
+            subject_id = subject_result[0]['ID']
+
+            group_result = self.db_operations.db.execute_query(
+                "SELECT ID FROM Группы WHERE Группа = ? AND Подгруппа = ?",
+                (group_name, subgroup)
+            )
+            if not group_result:
+                errors.append(f"Строка {i + 1}: группа '{group_display}' не найдена")
+                continue
+            group_id = group_result[0]['ID']
+
+            for j, existing_data in enumerate(workloads_data):
+                if (existing_data['subject_id'] == subject_id and
+                        existing_data['group_id'] == group_id):
+                    duplicates.append(f"Строка {i + 1}: дублируется со строкой {j + 1}")
+                    break
+
+            if self.db_operations.check_workload_duplicate(teacher_id, subject_id, group_id):
+                duplicates.append(f"Строка {i + 1}: такая нагрузка уже существует в базе данных")
+
             workload_data = {
                 'Преподаватель': teacher,
                 'Дисциплина': subject,
                 'Группа': group_name,
                 'Подгруппа': subgroup,
-                'Часы в неделю': hours
+                'Часы в неделю': hours,
+                'teacher_id': teacher_id,
+                'subject_id': subject_id,
+                'group_id': group_id
             }
 
             workloads_data.append(workload_data)
+
+        if duplicates:
+            for duplicate in duplicates[:3]:
+                self.toast.show(duplicate, success=False)
+            if len(duplicates) > 3:
+                self.toast.show(f"... и еще {len(duplicates) - 3} дубликатов", success=False)
+            return
 
         if errors:
             for error in errors[:3]:
@@ -1916,6 +1995,11 @@ class MultiWorkloadForm:
         if not workloads_data:
             self.toast.show("Добавьте хотя бы одну строку нагрузки!", success=False)
             return
+
+        for workload in workloads_data:
+            workload.pop('teacher_id', None)
+            workload.pop('subject_id', None)
+            workload.pop('group_id', None)
 
         self.on_submit(workloads_data)
 
@@ -1931,10 +2015,9 @@ class StreamForm:
         self.db_operations = db_operations
         self.toast = toast
         self.edit_mode = edit_mode
-        self.original_stream_name = stream_data['Название'] if stream_data and edit_mode else ""
+        self.original_stream_name = stream_data['Поток'] if stream_data and edit_mode else ""
 
         all_groups = self.db_operations.get_groups()
-
         all_subjects = self.db_operations.get_subjects_with_module_names()
 
         self.group_options = []
@@ -1965,7 +2048,7 @@ class StreamForm:
             label="Название потока",
             border_color=PALETTE[3],
             color=PALETTE[2],
-            value=stream_data['Название'] if stream_data and edit_mode else "",
+            value=stream_data['Поток'] if stream_data and edit_mode else "",  # ← Изменили ключ
         )
 
         self.group1_dropdown = ft.Dropdown(
@@ -2011,9 +2094,14 @@ class StreamForm:
             hint_text="Выберите дисциплины...",
         )
 
-        self.selected_subjects_container = ft.Column(
-            spacing=5,
-            visible=False
+        self.selected_subjects_container = ft.GridView(
+            runs_count=3,
+            spacing=8,
+            run_spacing=8,
+            child_aspect_ratio=2.5,
+            max_extent=120,
+            visible=False,
+            padding=5,
         )
 
         self.selected_subjects = []
@@ -2022,7 +2110,6 @@ class StreamForm:
         if edit_mode and stream_data:
             subject_ids = stream_data.get('Дисциплины_ID', [])
             subject_names = stream_data.get('Дисциплины_список', [])
-            self._update_selected_subjects_display()
 
             self.selected_subject_ids = subject_ids
             self.selected_subjects = subject_names
@@ -2066,7 +2153,8 @@ class StreamForm:
                 label=ft.Text(subject_name, color=PALETTE[2]),
                 bgcolor=PALETTE[4],
                 on_delete=lambda e, idx=i: self._remove_subject(idx),
-                delete_icon_color=PALETTE[2]
+                delete_icon_color=PALETTE[2],
+                delete_icon_tooltip="Удалить"
             )
             self.selected_subjects_container.controls.append(chip)
 
@@ -2081,12 +2169,13 @@ class StreamForm:
 
             self.selected_subjects.pop(index)
             self.selected_subject_ids.pop(index)
+
             option = ft.dropdown.Option(
                 str(removed_subject_id),
                 removed_subject_name
             )
             self.subjects_dropdown.options.append(option)
-
+            self.subjects_dropdown.options.sort(key=lambda x: x.text)
             self._update_selected_subjects_display()
 
             if hasattr(self, 'page'):
@@ -2191,7 +2280,30 @@ class StreamForm:
 
         self._update_selected_subjects_display()
 
-        self.subjects_dropdown.value = None
+        parent = self.subjects_dropdown.parent
+
+        remaining_options = [
+            ft.dropdown.Option(key=opt.key, text=opt.text)
+            for opt in self.subject_options
+            if int(opt.key) not in self.selected_subject_ids
+        ]
+
+        new_dropdown = ft.Dropdown(
+            label="Дисциплины для объединения *",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=remaining_options,
+            hint_text="Выберите дисциплины...",
+        )
+
+        if parent and hasattr(parent, 'controls'):
+            for i, control in enumerate(parent.controls):
+                if control == self.subjects_dropdown:
+                    parent.controls[i] = new_dropdown
+                    self.subjects_dropdown = new_dropdown
+                    break
 
         if hasattr(self, 'page'):
             self.page.update()
@@ -2202,7 +2314,6 @@ class StreamForm:
         group2_id = self.group2_dropdown.value
         group3_id = self.group3_dropdown.value
 
-        # Валидация
         if not stream_name:
             self.toast.show("Введите название потока!", success=False)
             return
@@ -2242,7 +2353,7 @@ class StreamForm:
             return
 
         stream_data = {
-            'Название': stream_name,
+            'Поток': stream_name,
             'Группы_список': group_ids,
             'Дисциплины_ID': self.selected_subject_ids,
             'Дисциплины_список': self.selected_subjects
@@ -2256,6 +2367,228 @@ class StreamForm:
             stream_data['Группа3_ID'] = group_ids[2]
 
         self.on_submit(stream_data)
+
+    def set_page(self, page: ft.Page):
+        self.page = page
+
+
+class GroupsManagementForm:
+    def __init__(self, on_submit: Callable, on_cancel: Callable,
+                 db_operations, settings_manager, toast):
+        self.on_submit = on_submit
+        self.on_cancel = on_cancel
+        self.db_ops = db_operations
+        self.settings_manager = settings_manager
+        self.toast = toast
+
+        self.all_groups = self.settings_manager.get_groups_with_exclusion_and_order()
+
+        self.excluded_groups = self.settings_manager.get_excluded_groups()
+        self.group_order = self.settings_manager.get_group_order()
+
+        self._create_controls()
+
+    def _create_controls(self):
+        self.groups_list = ft.Column(
+            spacing=10,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
+        )
+
+        self.order_text_field = ft.TextField(
+            label="Порядок групп (ID через запятую)",
+            multiline=True,
+            min_lines=3,
+            max_lines=6,
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            value=", ".join(str(id) for id in self.group_order),
+            hint_text="Например: 1, 3, 5, 2, 4"
+        )
+
+        self.reset_order_button = ft.ElevatedButton(
+            "Восстановить порядок по умолчанию",
+            icon=ft.Icons.RESTORE,
+            style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white"),
+            on_click=self._reset_order
+        )
+
+        # Информационные тексты
+        self.info_text = ft.Text(
+            "Группы, отмеченные галочкой, будут исключены из расписания. "
+            "Порядок групп определяет их расположение в итоговом расписании.",
+            size=12,
+            color=ft.Colors.BLUE_700,
+            italic=True
+        )
+
+        self._populate_groups_list()
+
+    def _populate_groups_list(self):
+        self.groups_list.controls.clear()
+
+        for group in self.all_groups:
+            group_id = group['ID']
+            group_name = group['Группа']
+            subgroup = group['Подгруппа']
+
+            if subgroup and subgroup != 'Нет':
+                display_name = f"{group_name} - {subgroup}"
+            else:
+                display_name = group_name
+
+            order = group['Порядок']
+            order_text = f"#{order + 1}" if order < 999 else "не задан"
+
+            row = ft.Row([
+                ft.Checkbox(
+                    value=group['Исключена'],
+                    on_change=lambda e, gid=group_id: self._on_exclusion_change(gid, e.control.value),
+                    label_style=ft.TextStyle(color=PALETTE[2])
+                ),
+                ft.Text(
+                    f"{display_name} (ID: {group_id}, Порядок: {order_text})",
+                    color=PALETTE[2],
+                    expand=True
+                ),
+                ft.Container(
+                    width=50,
+                    content=ft.Text(
+                        f"#{order + 1}" if order < 999 else "",
+                        color=ft.Colors.GREEN if order < 999 else ft.Colors.GREY,
+                        weight="bold"
+                    ),
+                    alignment=ft.alignment.center
+                )
+            ], spacing=15, alignment=ft.MainAxisAlignment.START)
+
+            self.groups_list.controls.append(row)
+
+    def _on_exclusion_change(self, group_id: int, is_excluded: bool):
+        if is_excluded:
+            if group_id not in self.excluded_groups:
+                self.excluded_groups.append(group_id)
+        else:
+            if group_id in self.excluded_groups:
+                self.excluded_groups.remove(group_id)
+
+    def _reset_order(self, e):
+        all_group_ids = [group['ID'] for group in self.all_groups if not group['Исключена']]
+        self.group_order = all_group_ids
+        self.order_text_field.value = ", ".join(str(id) for id in self.group_order)
+        if hasattr(self, 'page'):
+            self.page.update()
+        self.toast.show("Порядок сброшен по умолчанию", success=True)
+
+    def build(self) -> ft.Column:
+        title = "Управление группами в расписании"
+
+        scrollable_content = ft.Column([
+            ft.Text(title, size=18, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=10, color=PALETTE[1]),
+
+            ft.Text("Исключение групп из расписания", size=16, weight="bold", color=PALETTE[2]),
+            ft.Text("Отметьте группы, которые не должны попадать в итоговое расписание:",
+                    size=12, color=PALETTE[2]),
+
+            ft.Container(
+                content=self.groups_list,
+                height=300,
+                border=ft.border.all(1, PALETTE[1]),
+                border_radius=5,
+                padding=10
+            ),
+
+            ft.Divider(height=20, color=PALETTE[1]),
+
+            ft.Text("Порядок групп в расписании", size=16, weight="bold", color=PALETTE[2]),
+            ft.Text("Укажите ID групп через запятую в нужном порядке:",
+                    size=12, color=PALETTE[2]),
+
+            self.order_text_field,
+
+            ft.Row([
+                self.reset_order_button,
+                ft.Text("(неисключенные группы будут отсортированы по ID)",
+                        size=11, color=ft.Colors.GREY_600, italic=True)
+            ], spacing=10),
+
+            ft.Divider(height=20, color=PALETTE[1]),
+
+            self.info_text,
+
+            ft.Text(f"Всего групп: {len(self.all_groups)}, "
+                    f"Исключено: {len(self.excluded_groups)}, "
+                    f"Активных: {len(self.all_groups) - len(self.excluded_groups)}",
+                    size=12, color=PALETTE[2], weight="bold"),
+        ], spacing=15)
+
+        buttons_container = ft.Container(
+            content=ft.Row([
+                ft.ElevatedButton(
+                    "Сохранить",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=20),
+                    on_click=self._on_form_submit
+                ),
+                ft.ElevatedButton(
+                    "Отмена",
+                    style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                    on_click=self.on_cancel
+                )
+            ], alignment=ft.MainAxisAlignment.END, spacing=20),
+            padding=ft.padding.only(top=20),
+            border=ft.border.only(top=ft.border.BorderSide(1, PALETTE[1]))
+        )
+
+        return ft.Column([
+            ft.Container(
+                content=ft.ListView(
+                    [scrollable_content],
+                    expand=True,
+                    spacing=0,
+                    padding=0
+                ),
+                expand=True
+            ),
+            buttons_container
+        ], expand=True)
+
+    def _on_form_submit(self, e):
+        try:
+            order_text = self.order_text_field.value.strip()
+            if order_text:
+                new_order = [int(id.strip()) for id in order_text.split(',') if id.strip().isdigit()]
+            else:
+                new_order = []
+
+            all_group_ids = {group['ID'] for group in self.all_groups}
+            for group_id in new_order:
+                if group_id not in all_group_ids:
+                    self.toast.show(f"Группа с ID {group_id} не существует!", success=False)
+                    return
+
+            for excluded_id in self.excluded_groups:
+                if excluded_id in new_order:
+                    self.toast.show(f"Исключенная группа с ID {excluded_id} не может быть в порядке!", success=False)
+                    return
+
+            self.group_order = new_order
+
+            params = {
+                'excluded_groups': self.excluded_groups,
+                'group_order': self.group_order
+            }
+
+            if self.settings_manager.save_generation_params(params):
+                self.toast.show("Настройки групп успешно сохранены!", success=True)
+                self.on_submit(params)
+            else:
+                self.toast.show("Ошибка при сохранении настроек!", success=False)
+
+        except ValueError:
+            self.toast.show("Некорректный формат ID групп!", success=False)
+        except Exception as ex:
+            self.toast.show(f"Ошибка: {str(ex)}", success=False)
 
     def set_page(self, page: ft.Page):
         self.page = page

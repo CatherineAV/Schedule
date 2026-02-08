@@ -341,7 +341,6 @@ class DataPane(BasePage):
             self._render_standard_add_form(table_name, columns)
 
     # ========== ФОРМЫ ДОБАВЛЕНИЯ ==========
-
     def _render_group_add_form(self):
         def on_form_submit(group_data):
             success = self.db_ops.insert_group(group_data)
@@ -849,6 +848,9 @@ class DataPane(BasePage):
 
         workload_form = WorkloadForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
                                      edit_mode=True, workload_data=workload_data)
+
+        workload_form.workload_id = record['ID']
+
         workload_form.set_page(self.page)
 
         self.content.content = ft.Container(
@@ -972,6 +974,12 @@ class SettingsPage(BasePage):
                 on_click=lambda e: self._show_streams_section()
             ),
             ft.ElevatedButton(
+                "Управление группами",
+                icon=ft.Icons.GROUPS,
+                style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
+                on_click=lambda e: self._show_groups_management()
+            ),
+            ft.ElevatedButton(
                 "Параметры генерации",
                 icon=ft.Icons.TUNE,
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
@@ -980,6 +988,29 @@ class SettingsPage(BasePage):
         ])
 
         self._show_main_settings()
+        self.page.update()
+
+    def _show_groups_management(self):
+        from ui.forms import GroupsManagementForm
+
+        def on_form_submit(params):
+            self.toast.show("Настройки групп сохранены!", success=True)
+            self._show_main_settings()
+
+        def on_form_cancel(e):
+            self._show_main_settings()
+
+        settings_manager = SettingsManager(self.db_ops)
+        groups_form = GroupsManagementForm(
+            on_form_submit, on_form_cancel, self.db_ops, settings_manager, self.toast
+        )
+        groups_form.set_page(self.page)
+
+        self.content.content = ft.Container(
+            content=groups_form.build(),
+            padding=20,
+            expand=True
+        )
         self.page.update()
 
     def _on_back_click(self, e):
@@ -995,15 +1026,47 @@ class SettingsPage(BasePage):
 
     def _show_streams_section(self):
         settings_manager = SettingsManager(self.db_ops)
-
         streams = settings_manager.get_streams_with_subjects()
+        columns = ["ID", "Поток", "Группы", "Дисциплины"]
+        selected_row = self.table_manager.get_selected_row("Потоки")
 
-        columns = ["ID", "Название", "Группы", "Дисциплины"]
+        def on_row_select(index):
+            refresh_table()
+
+        def refresh_table():
+            nonlocal selected_row
+            selected_row = self.table_manager.get_selected_row("Потоки")
+
+            if selected_row is not None:
+                edit_button.bgcolor = PALETTE[3]
+                delete_button.bgcolor = ft.Colors.RED_400
+            else:
+                edit_button.bgcolor = ft.Colors.GREY_400
+                delete_button.bgcolor = ft.Colors.GREY_400
+
+            data_table = self.table_manager.create_data_table(
+                streams,
+                columns,
+                "Потоки",
+                on_row_select
+            )
+            table_scroll.controls = [data_table]
+
+            self.page.update()
+
         data_table = self.table_manager.create_data_table(
             streams,
             columns,
             "Потоки",
-            lambda index: self._on_stream_select(index)
+            on_row_select
+        )
+
+        table_scroll = ft.ListView(
+            [data_table],
+            expand=True,
+            spacing=0,
+            padding=0,
+            auto_scroll=False
         )
 
         add_button = ft.IconButton(
@@ -1017,7 +1080,7 @@ class SettingsPage(BasePage):
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
             icon_color=ft.Colors.WHITE,
-            bgcolor=ft.Colors.GREY_400,
+            bgcolor=PALETTE[3] if selected_row is not None else ft.Colors.GREY_400,
             tooltip="Редактировать выбранный поток",
             on_click=lambda e: self._edit_selected_stream(settings_manager),
         )
@@ -1025,7 +1088,7 @@ class SettingsPage(BasePage):
         delete_button = ft.IconButton(
             icon=ft.Icons.DELETE,
             icon_color=ft.Colors.WHITE,
-            bgcolor=ft.Colors.GREY_400,
+            bgcolor=ft.Colors.RED_400 if selected_row is not None else ft.Colors.GREY_400,
             tooltip="Удалить выбранный поток",
             on_click=lambda e: self._delete_selected_stream(settings_manager),
         )
@@ -1039,7 +1102,7 @@ class SettingsPage(BasePage):
             ft.Divider(height=20, color=PALETTE[1]),
 
             ft.Container(
-                content=ft.ListView([data_table], expand=True),
+                content=table_scroll,
                 expand=True,
                 padding=10,
                 border=ft.border.all(1, color=PALETTE[1]),
@@ -1061,9 +1124,10 @@ class SettingsPage(BasePage):
 
         def on_form_submit(stream_data):
             try:
-                success = settings_manager.save_stream(
-                    stream_data['Название'],
-                    stream_data['Группы_список']
+                success = settings_manager.save_stream_with_subjects(
+                    stream_data['Поток'],
+                    stream_data['Группы_список'],
+                    stream_data['Дисциплины_ID']
                 )
                 if success:
                     self.toast.show("Поток успешно добавлен!", success=True)
@@ -1086,24 +1150,22 @@ class SettingsPage(BasePage):
         )
         self.page.update()
 
-    def _on_stream_select(self, index):
-        self._show_streams_section()
-
     def _edit_selected_stream(self, settings_manager):
         selected_row = self.table_manager.get_selected_row("Потоки")
         if selected_row is None:
             self.toast.show("Выберите поток для редактирования!", success=False)
             return
 
-        streams = settings_manager.get_streams()
+        streams = settings_manager.get_streams_with_subjects()
         stream = streams[selected_row]
 
         def on_form_submit(stream_data):
             try:
-                success = settings_manager.update_stream(
+                success = settings_manager.update_stream_with_subjects(
                     stream['ID'],
-                    stream_data['Название'],
-                    stream_data['Группы_список']
+                    stream_data['Поток'],
+                    stream_data['Группы_список'],
+                    stream_data['Дисциплины_ID']
                 )
                 if success:
                     self.toast.show("Поток успешно обновлен!", success=True)
@@ -1117,8 +1179,18 @@ class SettingsPage(BasePage):
             self._show_streams_section()
 
         from ui.forms import StreamForm
+
+        stream_form_data = {
+            'Поток': stream['Поток'],
+            'Группа1_ID': stream.get('Группа1_ID'),
+            'Группа2_ID': stream.get('Группа2_ID'),
+            'Группа3_ID': stream.get('Группа3_ID'),
+            'Дисциплины_ID': stream.get('Дисциплины_ID', []),
+            'Дисциплины_список': stream.get('Дисциплины_список', [])
+        }
+
         stream_form = StreamForm(on_form_submit, on_form_cancel, self.db_ops, self.toast,
-                                 edit_mode=True, stream_data=stream)
+                                 edit_mode=True, stream_data=stream_form_data)
         stream_form.set_page(self.page)
 
         self.content.content = ft.Container(
@@ -1134,13 +1206,13 @@ class SettingsPage(BasePage):
             self.toast.show("Выберите поток для удаления!", success=False)
             return
 
-        streams = settings_manager.get_streams()
+        streams = settings_manager.get_streams_with_subjects()
         stream = streams[selected_row]
 
         dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text("Подтверждение удаления"),
-            content=ft.Text(f"Вы уверены, что хотите удалить поток '{stream['Название']}'?"),
+            content=ft.Text(f"Вы уверены, что хотите удалить поток '{stream['Поток']}'?"),
             actions=[]
         )
 
