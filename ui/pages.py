@@ -2,8 +2,8 @@ import flet as ft
 from typing import List, Dict
 from database.operations import DBOperations
 from database.settings_manager import SettingsManager
-from ui.components import Toast, DataTableManager, PALETTE
-from ui.forms import ModuleForm
+from ui.components import PALETTE, Toast, DataTableManager, SearchFilterBar
+from ui.forms import ModuleForm, StreamForm, GroupsManagementForm
 from ui.forms import MultiWorkloadForm, WorkloadForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
 
 
@@ -166,6 +166,8 @@ class DataPane(BasePage):
 
         selected_row = self.table_manager.get_selected_row(section_name)
 
+        self.filtered_data = data.copy()
+
         def on_row_select(index):
             refresh_table()
 
@@ -179,19 +181,144 @@ class DataPane(BasePage):
                 edit_button.bgcolor = ft.Colors.GREY_400
                 delete_button.bgcolor = ft.Colors.GREY_400
 
-            data_table = self.table_manager.create_data_table(data, columns, section_name, on_row_select)
+            data_table = self.table_manager.create_data_table(
+                self.filtered_data, columns, section_name, on_row_select
+            )
             table_scroll.controls = [data_table]
 
             self.page.update()
 
-        def delete_selected_record(e):
-            selected_row = self.table_manager.get_selected_row(section_name)
+        def filter_data(search_text):
+            if not search_text:
+                self.filtered_data = data.copy()
+            else:
+                self.filtered_data = []
+                for row in data:
+                    match_found = False
+                    for col in columns:
+                        if col != 'ID' and col in row:
+                            value = str(row.get(col, "")).lower()
+                            if search_text in value:
+                                match_found = True
+                                break
+                    if match_found:
+                        self.filtered_data.append(row)
 
-            if selected_row is None:
+            refresh_table()
+
+        def apply_filters(filters):
+            if not filters:
+                self.filtered_data = data.copy()
+            else:
+                filtered = data.copy()
+
+                if section_name == "Нагрузка":
+                    for key, value in filters.items():
+                        if value:
+                            if key == 'teacher':
+                                filtered = [row for row in filtered if row.get('Преподаватель', '') == value]
+                            elif key == 'subject':
+                                filtered = [row for row in filtered if row.get('Дисциплина', '') == value]
+                            elif key == 'group':
+                                if ' - ' in value:
+                                    group_name, subgroup = value.split(' - ')
+                                    filtered = [row for row in filtered if
+                                                row.get('Группа', '') == group_name and
+                                                row.get('Подгруппа', '') == subgroup]
+                                else:
+                                    filtered = [row for row in filtered if
+                                                row.get('Группа', '') == value]
+
+                            elif key == 'with_subgroups_only' and value:
+                                filtered = [row for row in filtered if
+                                            row.get('Подгруппа', '') and
+                                            row.get('Подгруппа', '') != 'Нет' and
+                                            row.get('Подгруппа', '') != 'None']
+
+                elif section_name == "Преподаватели":
+                    if 'active_only' in filters and filters['active_only']:
+                        pass
+
+                self.filtered_data = filtered
+
+            refresh_table()
+
+        search_bar = SearchFilterBar(
+            on_search=filter_data,
+            on_filter=apply_filters,
+            section_name=section_name,
+            db_operations=self.db_ops
+        )
+        search_bar.page = self.page
+
+        data_table = self.table_manager.create_data_table(
+            self.filtered_data, columns, section_name, on_row_select
+        )
+
+        table_scroll = ft.ListView(
+            [data_table],
+            expand=True,
+            spacing=0,
+            padding=0,
+            auto_scroll=False
+        )
+
+        add_button = ft.IconButton(
+            icon=ft.Icons.ADD,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=PALETTE[3],
+            tooltip="Добавить запись",
+            on_click=lambda e: self._render_add_form(section_name, columns),
+        )
+
+        def edit_selected_record(e):
+            selected_row_index = self.table_manager.get_selected_row(section_name)
+
+            if selected_row_index is None:
+                self.toast.show("Выберите запись для редактирования!", success=False)
+                return
+
+            # Используем filtered_data для получения правильного индекса
+            if 0 <= selected_row_index < len(self.filtered_data):
+                record = self.filtered_data[selected_row_index]
+            else:
+                record = data[selected_row_index] if selected_row_index < len(data) else None
+
+            if not record:
+                return
+
+            if section_name == "Группы":
+                self._render_edit_group_form(record)
+            elif section_name == "Дисциплины":
+                self._render_edit_subject_form(record)
+            elif section_name == "Преподаватели":
+                self._render_edit_teacher_form(record)
+            elif section_name == "Кабинеты":
+                self._render_edit_classroom_form(record)
+            elif section_name == "Модули":
+                self._render_edit_module_form(record)
+            elif section_name == "Территории":
+                self._render_edit_territory_form(record)
+            elif section_name == "Нагрузка":
+                self._render_edit_workload_form(record)
+            else:
+                self._render_edit_standard_form(section_name, record, columns)
+
+        def delete_selected_record(e):
+            selected_row_index = self.table_manager.get_selected_row(section_name)
+
+            if selected_row_index is None:
                 self.toast.show("Выберите запись для удаления!", success=False)
                 return
 
-            record = data[selected_row]
+            # Используем filtered_data для получения правильного индекса
+            if 0 <= selected_row_index < len(self.filtered_data):
+                record = self.filtered_data[selected_row_index]
+            else:
+                record = data[selected_row_index] if selected_row_index < len(data) else None
+
+            if not record:
+                return
 
             dialog = ft.AlertDialog(
                 modal=True,
@@ -243,50 +370,6 @@ class DataPane(BasePage):
             dialog.open = True
             self.page.update()
 
-        def edit_selected_record(e):
-            selected_row = self.table_manager.get_selected_row(section_name)
-
-            if selected_row is None:
-                self.toast.show("Выберите запись для редактирования!", success=False)
-                return
-
-            record = data[selected_row]
-
-            if section_name == "Группы":
-                self._render_edit_group_form(record)
-            elif section_name == "Дисциплины":
-                self._render_edit_subject_form(record)
-            elif section_name == "Преподаватели":
-                self._render_edit_teacher_form(record)
-            elif section_name == "Кабинеты":
-                self._render_edit_classroom_form(record)
-            elif section_name == "Модули":
-                self._render_edit_module_form(record)
-            elif section_name == "Территории":
-                self._render_edit_territory_form(record)
-            elif section_name == "Нагрузка":
-                self._render_edit_workload_form(record)
-            else:
-                self._render_edit_standard_form(section_name, record, columns)
-
-        data_table = self.table_manager.create_data_table(data, columns, section_name, on_row_select)
-
-        table_scroll = ft.ListView(
-            [data_table],
-            expand=True,
-            spacing=0,
-            padding=0,
-            auto_scroll=False
-        )
-
-        add_button = ft.IconButton(
-            icon=ft.Icons.ADD,
-            icon_color=ft.Colors.WHITE,
-            bgcolor=PALETTE[3],
-            tooltip="Добавить запись",
-            on_click=lambda e: self._render_add_form(section_name, columns),
-        )
-
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
             icon_color=ft.Colors.WHITE,
@@ -309,7 +392,12 @@ class DataPane(BasePage):
                 ft.Row([add_button, edit_button, delete_button], spacing=10)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Container(
+                content=search_bar.build(),
+                padding=ft.padding.only(bottom=10)
+            ),
+
+            ft.Divider(height=10, color=PALETTE[1]),
 
             ft.Container(
                 content=table_scroll,
@@ -976,15 +1064,9 @@ class SettingsPage(BasePage):
             ),
             ft.ElevatedButton(
                 "Управление группами",
-                icon=ft.Icons.GROUPS,
-                style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
-                on_click=lambda e: self._show_groups_management()
-            ),
-            ft.ElevatedButton(
-                "Параметры генерации",
                 icon=ft.Icons.TUNE,
                 style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=20),
-                on_click=lambda e: self._show_generation_params()
+                on_click=lambda e: self._show_groups_management()
             ),
         ])
 
@@ -992,14 +1074,12 @@ class SettingsPage(BasePage):
         self.page.update()
 
     def _show_groups_management(self):
-        from ui.forms import GroupsManagementForm
-
         def on_form_submit(params):
             self.toast.show("Настройки групп сохранены!", success=True)
             self._show_main_settings()
 
         def on_form_cancel(e):
-            self._show_main_settings()
+            self._on_back_click(e)
 
         settings_manager = SettingsManager(self.db_ops)
         groups_form = GroupsManagementForm(
@@ -1031,6 +1111,8 @@ class SettingsPage(BasePage):
         columns = ["ID", "Поток", "Группы", "Дисциплины"]
         selected_row = self.table_manager.get_selected_row("Потоки")
 
+        self.filtered_streams = streams.copy()
+
         def on_row_select(index):
             refresh_table()
 
@@ -1046,17 +1128,37 @@ class SettingsPage(BasePage):
                 delete_button.bgcolor = ft.Colors.GREY_400
 
             data_table = self.table_manager.create_data_table(
-                streams,
-                columns,
-                "Потоки",
-                on_row_select
+                self.filtered_streams, columns, "Потоки", on_row_select
             )
             table_scroll.controls = [data_table]
 
             self.page.update()
 
+        def filter_data(search_text):
+            if not search_text:
+                self.filtered_streams = streams.copy()
+            else:
+                self.filtered_streams = []
+                for stream in streams:
+                    if (search_text in str(stream.get('Поток', '')).lower() or
+                            search_text in str(stream.get('Группы', '')).lower() or
+                            search_text in str(stream.get('Дисциплины', '')).lower()):
+                        self.filtered_streams.append(stream)
+
+            refresh_table()
+
+        def apply_filters(filters):
+            if not filters:
+                self.filtered_streams = streams.copy()
+            else:
+                self.filtered_streams = streams.copy()
+            refresh_table()
+
+        search_bar = SearchFilterBar(on_search=filter_data, on_filter=apply_filters)
+        search_bar.page = self.page
+
         data_table = self.table_manager.create_data_table(
-            streams,
+            self.filtered_streams,
             columns,
             "Потоки",
             on_row_select
@@ -1100,7 +1202,12 @@ class SettingsPage(BasePage):
                 ft.Row([add_button, edit_button, delete_button], spacing=10)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
 
-            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Container(
+                content=search_bar.build(),
+                padding=ft.padding.only(top=10, bottom=10)
+            ),
+
+            ft.Divider(height=10, color=PALETTE[1]),
 
             ft.Container(
                 content=table_scroll,
@@ -1113,16 +1220,7 @@ class SettingsPage(BasePage):
 
         self.page.update()
 
-    def _show_generation_params(self):
-        self.content.content = ft.Column([
-            ft.Text("Параметры генерации", size=20, weight="bold", color=PALETTE[2]),
-            ft.Divider(height=20, color=PALETTE[1]),
-            ft.Text("Настройки генерации расписания будут здесь", size=16, color=PALETTE[0])
-        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-
     def _render_add_stream_form(self, settings_manager):
-        from ui.forms import StreamForm
-
         def on_form_submit(stream_data):
             try:
                 success = settings_manager.save_stream_with_subjects(
@@ -1178,8 +1276,6 @@ class SettingsPage(BasePage):
 
         def on_form_cancel(e):
             self._show_streams_section()
-
-        from ui.forms import StreamForm
 
         stream_form_data = {
             'Поток': stream['Поток'],

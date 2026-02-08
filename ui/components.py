@@ -39,6 +39,57 @@ class Toast:
 class DataTableManager:
     def __init__(self):
         self.selected_rows = {}
+        self.filtered_data = {}
+        self.current_filters = {}
+        self.current_search = ""
+
+    def create_searchable_data_table(self, data: List[Dict[str, Any]], columns: List[str],
+                                     section_name: str, on_row_select: Callable,
+                                     search_text: str = "", filters: Dict = None) -> ft.DataTable:
+
+        filtered_data = self._filter_data(data, columns, search_text, filters)
+        self.filtered_data[section_name] = filtered_data
+
+        return self.create_data_table(filtered_data, columns, section_name, on_row_select)
+
+    def _filter_data(self, data: List[Dict[str, Any]], columns: List[str],
+                     search_text: str, filters: Dict) -> List[Dict[str, Any]]:
+        if not search_text and not filters:
+            return data
+
+        filtered = []
+        search_lower = search_text.lower() if search_text else ""
+
+        for row in data:
+            if search_text:
+                found = False
+                for col in columns:
+                    if col != 'ID' and col in row:
+                        value = str(row.get(col, "")).lower()
+                        if search_lower in value:
+                            found = True
+                            break
+                if not found:
+                    continue
+
+            if filters:
+                matches_filters = True
+                for key, value in filters.items():
+                    if key == 'active_only' and value:
+                        status = row.get('Статус', row.get('Активен', True))
+                        if not status:
+                            matches_filters = False
+                            break
+
+                if not matches_filters:
+                    continue
+
+            filtered.append(row)
+
+        return filtered
+
+    def get_filtered_data(self, section_name: str) -> List[Dict[str, Any]]:
+        return self.filtered_data.get(section_name, [])
 
     def create_data_table(self, data: List[Dict[str, Any]], columns: List[str],
                           section_name: str, on_row_select: Callable) -> ft.DataTable:
@@ -187,6 +238,233 @@ class DataTableManager:
     def clear_selection(self, section_name: str):
         if section_name in self.selected_rows:
             self.selected_rows[section_name] = None
+
+
+class SearchFilterBar:
+    def __init__(self, on_search: Callable = None, on_filter: Callable = None,
+                 section_name: str = "", db_operations=None):
+        self.on_search = on_search
+        self.on_filter = on_filter
+        self.section_name = section_name
+        self.db_ops = db_operations
+        self.current_search = ""
+        self.current_filters = {}
+
+        self.teachers = []
+        self.subjects = []
+        self.groups = []
+
+        if db_operations and section_name:
+            self._load_filter_data()
+
+        self.search_field = ft.TextField(
+            hint_text="Поиск...",
+            border_color=PALETTE[3],
+            color=PALETTE[2],
+            expand=True,
+            on_change=self._on_search_change,
+            prefix_icon=ft.Icons.SEARCH,
+            border_radius=5,
+        )
+
+        self.filter_button = ft.IconButton(
+            icon=ft.Icons.FILTER_LIST,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=PALETTE[3],
+            tooltip="Фильтры",
+            on_click=self._on_filter_click,
+        )
+
+        self.clear_button = ft.IconButton(
+            icon=ft.Icons.CLEAR,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=PALETTE[2],
+            tooltip="Очистить поиск и фильтры",
+            on_click=self._on_clear_click,
+        )
+
+        self.filter_dialog = None
+        self.filter_controls = {}
+        self.page = None
+
+    def _load_filter_data(self):
+        if self.section_name == "Нагрузка" and self.db_ops:
+            self.teachers = self.db_ops.get_table_data("Преподаватели")
+            self.subjects = self.db_ops.get_subjects_with_module_names()
+            self.groups = self.db_ops.get_groups()
+
+    def _create_filter_dialog_content(self):
+        if self.section_name == "Нагрузка":
+            return self._create_workload_filters()
+        else:
+            return self._create_default_filters()
+
+    def _create_default_filters(self):
+        return ft.Column([
+            ft.Text("Фильтрация данных", size=18, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=10, color=PALETTE[1]),
+            ft.Text("Выберите критерии фильтрации:", color=PALETTE[2]),
+            ft.Checkbox(
+                label="Только активные записи",
+                value=self.current_filters.get('active_only', False),
+                on_change=lambda e: self._update_filter('active_only', e.control.value)
+            ),
+        ], spacing=15, width=400)
+
+    def _create_workload_filters(self):
+        teacher_options = [ft.dropdown.Option("", "Все преподаватели")]
+        teacher_options.extend([
+            ft.dropdown.Option(t['ФИО'], t['ФИО'])
+            for t in self.teachers
+        ])
+
+        subject_options = [ft.dropdown.Option("", "Все дисциплины")]
+        subject_options.extend([
+            ft.dropdown.Option(s['Дисциплина'], s['Дисциплина'])
+            for s in self.subjects
+        ])
+
+        group_options = [ft.dropdown.Option("", "Все группы")]
+        for group in self.groups:
+            group_name = group['Группа']
+            subgroup = group['Подгруппа']
+            if subgroup and subgroup != 'Нет':
+                display_name = f"{group_name} - {subgroup}"
+            else:
+                display_name = group_name
+            group_options.append(ft.dropdown.Option(display_name, display_name))
+
+        teacher_dropdown = ft.Dropdown(
+            label="Преподаватель",
+            options=teacher_options,
+            value=self.current_filters.get('teacher', ""),
+            width=350,
+            border_color=PALETTE[3],
+            on_change=lambda e: self._update_filter('teacher', e.control.value)
+        )
+
+        subject_dropdown = ft.Dropdown(
+            label="Дисциплина",
+            options=subject_options,
+            value=self.current_filters.get('subject', ""),
+            width=350,
+            border_color=PALETTE[3],
+            on_change=lambda e: self._update_filter('subject', e.control.value)
+        )
+
+        group_dropdown = ft.Dropdown(
+            label="Группа",
+            options=group_options,
+            value=self.current_filters.get('group', ""),
+            width=350,
+            border_color=PALETTE[3],
+            on_change=lambda e: self._update_filter('group', e.control.value)
+        )
+
+        self.filter_controls['teacher'] = teacher_dropdown
+        self.filter_controls['subject'] = subject_dropdown
+        self.filter_controls['group'] = group_dropdown
+
+        return ft.Column([
+            ft.Text("Фильтрация нагрузки", size=18, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=10, color=PALETTE[1]),
+            ft.Text("Выберите критерии фильтрации:", color=PALETTE[2]),
+
+            ft.Container(height=10),
+            teacher_dropdown,
+            ft.Container(height=10),
+            subject_dropdown,
+            ft.Container(height=10),
+            group_dropdown,
+            ft.Container(height=10),
+
+            ft.Checkbox(
+                label="Показывать только с подгруппами",
+                value=self.current_filters.get('with_subgroups_only', False),
+                on_change=lambda e: self._update_filter('with_subgroups_only', e.control.value)
+            ),
+        ], spacing=5, width=400, scroll=ft.ScrollMode.AUTO)
+
+    def _on_search_change(self, e):
+        self.current_search = e.control.value.lower()
+        if self.on_search:
+            self.on_search(self.current_search)
+
+    def _on_filter_click(self, e):
+        self._show_filter_dialog()
+
+    def _on_clear_click(self, e):
+        self.search_field.value = ""
+        self.current_search = ""
+        self.current_filters = {}
+        for control in self.filter_controls.values():
+            if hasattr(control, 'value'):
+                control.value = ""
+        if self.page:
+            self.search_field.update()
+        if self.on_search:
+            self.on_search("")
+        if self.on_filter:
+            self.on_filter({})
+
+    def _show_filter_dialog(self):
+        if not self.on_filter or not self.page:
+            return
+
+        filter_content = self._create_filter_dialog_content()
+
+        self.filter_dialog = ft.AlertDialog(
+            modal=True,
+            content=ft.Container(
+                content=filter_content,
+                width=450,
+                height=350 if self.section_name == "Нагрузка" else 250,
+            ),
+            actions=[
+                ft.TextButton("Сбросить", on_click=self._reset_filters),
+                ft.TextButton("Применить", on_click=self._apply_filters),
+                ft.TextButton("Отмена", on_click=self._close_filter_dialog),
+            ],
+        )
+
+        self.page.overlay.append(self.filter_dialog)
+        self.filter_dialog.open = True
+        self.page.update()
+
+    def _update_filter(self, key: str, value):
+        self.current_filters[key] = value
+        if key in self.filter_controls:
+            self.filter_controls[key].value = value
+
+    def _reset_filters(self, e):
+        self.current_filters = {}
+        for control in self.filter_controls.values():
+            if hasattr(control, 'value'):
+                control.value = ""
+        self.filter_dialog.open = False
+        self.page.update()
+        if self.on_filter:
+            self.on_filter({})
+
+    def _apply_filters(self, e):
+        self.filter_dialog.open = False
+        self.page.update()
+        if self.on_filter:
+            self.on_filter(self.current_filters)
+
+    def _close_filter_dialog(self, e):
+        self.filter_dialog.open = False
+        self.page.update()
+
+    def build(self) -> ft.Row:
+        return ft.Row([
+            ft.Container(
+                content=self.search_field,
+                expand=True,
+            ),
+            self.filter_button,
+            self.clear_button,
+        ], spacing=10, alignment=ft.MainAxisAlignment.START, expand=True)
 
 
 class Validator:

@@ -5,7 +5,7 @@ from ui.pages import MainMenu
 
 
 def main(page: ft.Page):
-    page.title = "Генератор расписания"
+    page.title = "Генератор расписания занятий ТХТК"
     page.bgcolor = PALETTE[4]
     page.horizontal_alignment = "stretch"
     page.vertical_alignment = "start"
