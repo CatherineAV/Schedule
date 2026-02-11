@@ -1,10 +1,13 @@
 import flet as ft
+import os, platform, subprocess
+from datetime import datetime
 from typing import List, Dict
 from database.operations import DBOperations
 from database.settings_manager import SettingsManager
 from ui.components import PALETTE, Toast, DataTableManager, SearchFilterBar
 from ui.forms import ModuleForm, StreamForm, GroupsManagementForm
 from ui.forms import MultiWorkloadForm, WorkloadForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
+from schedule_template import SimpleTemplateGenerator
 
 
 class BasePage:
@@ -59,10 +62,113 @@ class MainMenu(BasePage):
         settings_page.render()
 
     def _on_generate_click(self, e):
-        self.content.content = ft.Column([
-            ft.Text("Сгенерировать расписание.", size=16, color=PALETTE[0])
+        try:
+            generator = SimpleTemplateGenerator(self.db_ops)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"generated/schedule_template_{timestamp}.xlsx"
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"generated/schedule_groups_{timestamp}.xlsx"
+
+            os.makedirs("generated", exist_ok=True)
+
+            self.toast.show("Начинаю генерацию шаблона с группами...", success=True)
+
+            self.content.content = self._create_loading_screen(
+                "Загрузка групп из базы данных..."
+            )
+            self.page.update()
+
+            result_path = generator.generate_template_with_groups(output_path)
+            self.content.content = self._create_success_screen(result_path)
+            self.toast.show(f"Шаблон с группами создан!", success=True)
+
+        except Exception as ex:
+            self.content.content = self._create_error_screen(str(ex))
+            self.toast.show(f"Ошибка при генерации: {str(ex)}", success=False)
+
+    def _create_loading_screen(self, message: str) -> ft.Column:
+        """Создает экран загрузки"""
+        return ft.Column([
+            ft.Text("Генерация шаблона", size=24, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.ProgressRing(width=50, height=50, stroke_width=3),
+            ft.Container(height=20),
+            ft.Text(message, size=16, color=PALETTE[0]),
+            ft.Text("Пожалуйста, подождите...", color=PALETTE[0], italic=True)
         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-        self.page.update()
+
+    def _create_success_screen(self, file_path: str) -> ft.Column:
+
+        return ft.Column([
+            ft.Text("Шаблон создан!", size=24, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=60),
+            ft.Container(height=20),
+            ft.Text(f"Файл: {os.path.basename(file_path)}", size=16, color=PALETTE[0]),
+            ft.Text(f"Путь: {file_path}", color=PALETTE[0], size=12),
+            ft.Container(height=30),
+            ft.Row([
+                ft.ElevatedButton(
+                    "Открыть папку",
+                    icon=ft.Icons.FOLDER_OPEN,
+                    style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=15),
+                    on_click=lambda e: self._open_folder(file_path)
+                ),
+                ft.ElevatedButton(
+                    "Создать еще",
+                    icon=ft.Icons.ADD,
+                    style=ft.ButtonStyle(bgcolor=PALETTE[2], color="white", padding=15),
+                    on_click=lambda e: self._on_generate_click(e)
+                ),
+                ft.ElevatedButton(
+                    "На главную",
+                    icon=ft.Icons.HOME,
+                    style=ft.ButtonStyle(bgcolor=PALETTE[1], color="white", padding=15),
+                    on_click=lambda e: self.render()
+                )
+            ], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
+    def _create_error_screen(self, error_message: str) -> ft.Column:
+        """Создает экран ошибки"""
+        return ft.Column([
+            ft.Text("Ошибка генерации", size=24, weight="bold", color=ft.Colors.RED),
+            ft.Divider(height=20, color=PALETTE[1]),
+            ft.Icon(ft.Icons.ERROR, color=ft.Colors.RED, size=60),
+            ft.Container(height=20),
+            ft.Text("Произошла ошибка:", size=16, color=PALETTE[0]),
+            ft.Text(error_message, color=PALETTE[0], size=12),
+            ft.Container(height=30),
+            ft.Row([
+                ft.ElevatedButton(
+                    "Попробовать снова",
+                    icon=ft.Icons.REFRESH,
+                    style=ft.ButtonStyle(bgcolor=PALETTE[3], color="white", padding=15),
+                    on_click=lambda e: self._on_generate_click(e)
+                ),
+                ft.ElevatedButton(
+                    "На главную",
+                    icon=ft.Icons.HOME,
+                    style=ft.ButtonStyle(bgcolor=PALETTE[1], color="white", padding=15),
+                    on_click=lambda e: self.render()
+                )
+            ], spacing=20, alignment=ft.MainAxisAlignment.CENTER)
+        ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
+    def _open_folder(self, file_path: str):
+        folder_path = os.path.dirname(os.path.abspath(file_path))
+
+        try:
+            if platform.system() == "Windows":
+                os.startfile(folder_path)
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.Popen(["open", folder_path])
+            else:  # Linux
+                subprocess.Popen(["xdg-open", folder_path])
+        except Exception as ex:
+            self.toast.show(f"Не удалось открыть папку: {str(ex)}", success=False)
 
 
 class DataMenu(BasePage):
@@ -165,7 +271,6 @@ class DataPane(BasePage):
             columns = self.db_ops.get_table_columns(section_name)
 
         selected_row = self.table_manager.get_selected_row(section_name)
-
         self.filtered_data = data.copy()
 
         def on_row_select(index):
@@ -185,7 +290,6 @@ class DataPane(BasePage):
                 self.filtered_data, columns, section_name, on_row_select
             )
             table_scroll.controls = [data_table]
-
             self.page.update()
 
         def filter_data(search_text):
@@ -193,17 +297,17 @@ class DataPane(BasePage):
                 self.filtered_data = data.copy()
             else:
                 self.filtered_data = []
+                search_lower = search_text.lower()
                 for row in data:
                     match_found = False
                     for col in columns:
                         if col != 'ID' and col in row:
                             value = str(row.get(col, "")).lower()
-                            if search_text in value:
+                            if search_lower in value:
                                 match_found = True
                                 break
                     if match_found:
                         self.filtered_data.append(row)
-
             refresh_table()
 
         def apply_filters(filters):
@@ -211,8 +315,10 @@ class DataPane(BasePage):
                 self.filtered_data = data.copy()
             else:
                 filtered = data.copy()
-
-                if section_name == "Нагрузка":
+                if section_name == "Дисциплины" and 'modules' in filters and filters['modules']:
+                    selected_modules = filters['modules']
+                    filtered = [row for row in filtered if row.get('Код модуля', '') in selected_modules]
+                elif section_name == "Нагрузка":
                     for key, value in filters.items():
                         if value:
                             if key == 'teacher':
@@ -226,21 +332,14 @@ class DataPane(BasePage):
                                                 row.get('Группа', '') == group_name and
                                                 row.get('Подгруппа', '') == subgroup]
                                 else:
-                                    filtered = [row for row in filtered if
-                                                row.get('Группа', '') == value]
+                                    filtered = [row for row in filtered if row.get('Группа', '') == value]
 
                             elif key == 'with_subgroups_only' and value:
                                 filtered = [row for row in filtered if
                                             row.get('Подгруппа', '') and
                                             row.get('Подгруппа', '') != 'Нет' and
                                             row.get('Подгруппа', '') != 'None']
-
-                elif section_name == "Преподаватели":
-                    if 'active_only' in filters and filters['active_only']:
-                        pass
-
                 self.filtered_data = filtered
-
             refresh_table()
 
         search_bar = SearchFilterBar(
@@ -250,6 +349,10 @@ class DataPane(BasePage):
             db_operations=self.db_ops
         )
         search_bar.page = self.page
+
+        if section_name == "Дисциплины":
+            modules = self.db_ops.get_modules()
+            search_bar.modules = modules
 
         data_table = self.table_manager.create_data_table(
             self.filtered_data, columns, section_name, on_row_select
@@ -311,7 +414,6 @@ class DataPane(BasePage):
                 self.toast.show("Выберите запись для удаления!", success=False)
                 return
 
-            # Используем filtered_data для получения правильного индекса
             if 0 <= selected_row_index < len(self.filtered_data):
                 record = self.filtered_data[selected_row_index]
             else:
