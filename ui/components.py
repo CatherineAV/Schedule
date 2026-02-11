@@ -253,6 +253,7 @@ class SearchFilterBar:
         self.teachers = []
         self.subjects = []
         self.groups = []
+        self.modules = []
 
         if db_operations and section_name:
             self._load_filter_data()
@@ -292,23 +293,105 @@ class SearchFilterBar:
             self.teachers = self.db_ops.get_table_data("Преподаватели")
             self.subjects = self.db_ops.get_subjects_with_module_names()
             self.groups = self.db_ops.get_groups()
+        elif self.section_name == "Дисциплины" and self.db_ops:
+            self.modules = self.db_ops.get_modules()
 
     def _create_filter_dialog_content(self):
         if self.section_name == "Нагрузка":
             return self._create_workload_filters()
+        elif self.section_name == "Дисциплины":
+            return self._create_subject_filters()
         else:
             return self._create_default_filters()
+
+    def _create_subject_filters(self):
+        if not self.modules:
+            return ft.Column([
+                ft.Text("Фильтрация дисциплин", size=18, weight="bold", color=PALETTE[2]),
+                ft.Divider(height=10, color=PALETTE[1]),
+                ft.Text("Модули не найдены", color=ft.Colors.ORANGE_700),
+            ], spacing=15, width=400)
+
+        module_checkboxes = []
+
+        select_all_checkbox = ft.Checkbox(
+            label="Выбрать все",
+            value=False,
+            label_style=ft.TextStyle(color=PALETTE[2]),
+            on_change=self._on_select_all_modules
+        )
+        module_checkboxes.append(select_all_checkbox)
+        self.filter_controls['select_all'] = select_all_checkbox
+
+        for module in self.modules:
+            module_code = module['Код']
+            module_name = module['Название']
+
+            checkbox = ft.Checkbox(
+                label=f"{module_code} - {module_name}",
+                value=module_code in self.current_filters.get('modules', []),
+                label_style=ft.TextStyle(color=PALETTE[2]),
+                on_change=lambda e, code=module_code: self._on_module_filter_change(code, e.control.value)
+            )
+            module_checkboxes.append(checkbox)
+            self.filter_controls[f'module_{module_code}'] = checkbox
+
+        return ft.Column([
+            ft.Text("Фильтрация дисциплин по модулям", size=18, weight="bold", color=PALETTE[2]),
+            ft.Divider(height=10, color=PALETTE[1]),
+            ft.Text("Выберите модули для отображения:", color=PALETTE[2]),
+            ft.Container(
+                content=ft.Column(
+                    module_checkboxes,
+                    spacing=8,
+                    scroll=ft.ScrollMode.AUTO
+                ),
+                height=300,
+                padding=10,
+                border=ft.border.all(1, PALETTE[1]),
+                border_radius=5
+            ),
+            ft.Text(f"Всего модулей: {len(self.modules)}", size=12, color=ft.Colors.BLUE_700),
+        ], spacing=15, width=450)
+
+    def _on_select_all_modules(self, e):
+        is_checked = e.control.value
+        selected_modules = []
+
+        for module in self.modules:
+            module_code = module['Код']
+            checkbox_key = f'module_{module_code}'
+
+            if checkbox_key in self.filter_controls:
+                self.filter_controls[checkbox_key].value = is_checked
+
+            if is_checked:
+                selected_modules.append(module_code)
+
+        self.current_filters['modules'] = selected_modules
+
+        if hasattr(self, 'page') and self.page:
+            self.page.update()
+
+    def _on_module_filter_change(self, module_code: str, is_checked: bool):
+        if 'modules' not in self.current_filters:
+            self.current_filters['modules'] = []
+
+        if is_checked:
+            if module_code not in self.current_filters['modules']:
+                self.current_filters['modules'].append(module_code)
+        else:
+            if module_code in self.current_filters['modules']:
+                self.current_filters['modules'].remove(module_code)
+
+            if 'select_all' in self.filter_controls:
+                self.filter_controls['select_all'].value = False
 
     def _create_default_filters(self):
         return ft.Column([
             ft.Text("Фильтрация данных", size=18, weight="bold", color=PALETTE[2]),
             ft.Divider(height=10, color=PALETTE[1]),
-            ft.Text("Выберите критерии фильтрации:", color=PALETTE[2]),
-            ft.Checkbox(
-                label="Только активные записи",
-                value=self.current_filters.get('active_only', False),
-                on_change=lambda e: self._update_filter('active_only', e.control.value)
-            ),
+            ft.Text("Фильтры для этого раздела пока не реализованы", color=PALETTE[0]),
         ], spacing=15, width=400)
 
     def _create_workload_filters(self):
@@ -328,7 +411,7 @@ class SearchFilterBar:
         for group in self.groups:
             group_name = group['Группа']
             subgroup = group['Подгруппа']
-            if subgroup and subgroup != 'Нет':
+            if subgroup and subgroup != 'Нет' and subgroup != 'None':
                 display_name = f"{group_name} - {subgroup}"
             else:
                 display_name = group_name
@@ -369,7 +452,6 @@ class SearchFilterBar:
             ft.Text("Фильтрация нагрузки", size=18, weight="bold", color=PALETTE[2]),
             ft.Divider(height=10, color=PALETTE[1]),
             ft.Text("Выберите критерии фильтрации:", color=PALETTE[2]),
-
             ft.Container(height=10),
             teacher_dropdown,
             ft.Container(height=10),
@@ -377,7 +459,6 @@ class SearchFilterBar:
             ft.Container(height=10),
             group_dropdown,
             ft.Container(height=10),
-
             ft.Checkbox(
                 label="Показывать только с подгруппами",
                 value=self.current_filters.get('with_subgroups_only', False),
@@ -397,9 +478,15 @@ class SearchFilterBar:
         self.search_field.value = ""
         self.current_search = ""
         self.current_filters = {}
-        for control in self.filter_controls.values():
+
+        for key, control in self.filter_controls.items():
             if hasattr(control, 'value'):
-                control.value = ""
+                if key == 'select_all':
+                    control.value = False
+                elif key.startswith('module_'):
+                    control.value = False
+                else:
+                    control.value = ""
         if self.page:
             self.search_field.update()
         if self.on_search:
@@ -413,12 +500,14 @@ class SearchFilterBar:
 
         filter_content = self._create_filter_dialog_content()
 
+        dialog_height = 500 if self.section_name == "Дисциплины" else 350
+
         self.filter_dialog = ft.AlertDialog(
             modal=True,
             content=ft.Container(
                 content=filter_content,
-                width=450,
-                height=350 if self.section_name == "Нагрузка" else 250,
+                width=500,
+                height=dialog_height,
             ),
             actions=[
                 ft.TextButton("Сбросить", on_click=self._reset_filters),
@@ -438,17 +527,30 @@ class SearchFilterBar:
 
     def _reset_filters(self, e):
         self.current_filters = {}
-        for control in self.filter_controls.values():
+
+        for key, control in self.filter_controls.items():
             if hasattr(control, 'value'):
-                control.value = ""
+                if key == 'select_all':
+                    control.value = False
+                elif key.startswith('module_'):
+                    control.value = False
+                else:
+                    control.value = ""
+
         self.filter_dialog.open = False
         self.page.update()
+
         if self.on_filter:
             self.on_filter({})
 
     def _apply_filters(self, e):
         self.filter_dialog.open = False
         self.page.update()
+
+        if self.section_name == "Дисциплины" and 'modules' in self.current_filters:
+            if not isinstance(self.current_filters['modules'], list):
+                self.current_filters['modules'] = []
+
         if self.on_filter:
             self.on_filter(self.current_filters)
 
