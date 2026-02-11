@@ -1,22 +1,17 @@
-# modules/simple_template_generator.py
 import os
 from openpyxl import Workbook
 from openpyxl.styles import Border, Side, Alignment, Font
 from openpyxl.utils import get_column_letter
-from openpyxl.styles.borders import BORDER_THIN
 from typing import List, Dict, Any
 from database.operations import DBOperations
 from database.settings_manager import SettingsManager
 
 
 class SimpleTemplateGenerator:
-    """Генератор шаблона Excel с реальными группами из БД"""
-
     def __init__(self, db_ops: DBOperations):
         self.db_ops = db_ops
         self.settings_manager = SettingsManager(db_ops)
 
-        # Время уроков
         self.lesson_times = [
             "9.00 - 9.45", "9.55 - 10.40", "10.50 - 11.35",
             "11.45 - 12.30", "13.00-13.45", "14.15-15.00",
@@ -35,7 +30,6 @@ class SimpleTemplateGenerator:
 
         self.days_order = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб']
 
-        # Базовые стили
         self.thin_border = Border(
             left=Side(style='thin'),
             right=Side(style='thin'),
@@ -44,9 +38,6 @@ class SimpleTemplateGenerator:
         )
 
     def generate_template_with_groups(self, output_path: str) -> str:
-        """
-        Генерирует шаблон с реальными группами из базы данных
-        """
         wb = Workbook()
         ws = wb.active
         ws.title = "Расписание I семестр"
