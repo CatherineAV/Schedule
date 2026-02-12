@@ -381,7 +381,6 @@ class DataPane(BasePage):
                 self.toast.show("Выберите запись для редактирования!", success=False)
                 return
 
-            # Используем filtered_data для получения правильного индекса
             if 0 <= selected_row_index < len(self.filtered_data):
                 record = self.filtered_data[selected_row_index]
             else:

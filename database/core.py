@@ -116,9 +116,11 @@ class Database:
                 Группа1_ID INTEGER NOT NULL,
                 Группа2_ID INTEGER,
                 Группа3_ID INTEGER,
+                Группа4_ID INTEGER,
                 FOREIGN KEY (Группа1_ID) REFERENCES Группы(ID),
                 FOREIGN KEY (Группа2_ID) REFERENCES Группы(ID),
-                FOREIGN KEY (Группа3_ID) REFERENCES Группы(ID)
+                FOREIGN KEY (Группа3_ID) REFERENCES Группы(ID),
+                FOREIGN KEY (Группа4_ID) REFERENCES Группы(ID)
             );
             
             CREATE TABLE IF NOT EXISTS Поток_Дисциплина (

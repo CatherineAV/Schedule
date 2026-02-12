@@ -2084,6 +2084,17 @@ class StreamForm:
                 'Группа3_ID') else None,
         )
 
+        self.group4_dropdown = ft.Dropdown(
+            label="Группа 4 (необязательно)",
+            expand=True,
+            border_color=PALETTE[3],
+            bgcolor=ft.Colors.BLUE_GREY,
+            color=PALETTE[2],
+            options=self.group_options.copy(),
+            value=str(stream_data.get('Группа4_ID', '')) if stream_data and edit_mode and stream_data.get(
+                'Группа4_ID') else None,
+        )
+
         self.subjects_dropdown = ft.Dropdown(
             label="Дисциплины для объединения *",
             expand=True,
@@ -2194,12 +2205,13 @@ class StreamForm:
             ft.Divider(height=20, color=PALETTE[1]),
 
             ft.Text("Группы в потоке", size=16, weight="bold", color=PALETTE[2]),
-            ft.Text("Можно объединить от 1 до 3 групп",
+            ft.Text("Можно объединить от 2 до 4 групп",
                     size=12, color=ft.Colors.BLUE_700, italic=True),
             self.no_groups_message,
             self.group1_dropdown,
             self.group2_dropdown,
             self.group3_dropdown,
+            self.group4_dropdown,
 
             ft.Divider(height=20, color=PALETTE[1]),
 
@@ -2313,6 +2325,7 @@ class StreamForm:
         group1_id = self.group1_dropdown.value
         group2_id = self.group2_dropdown.value
         group3_id = self.group3_dropdown.value
+        group4_id = self.group4_dropdown.value
 
         if not stream_name:
             self.toast.show("Введите название потока!", success=False)
@@ -2348,6 +2361,13 @@ class StreamForm:
                 self.toast.show(f"Некорректный ID группы 3: {group3_id}", success=False)
                 return
 
+        if group4_id and group4_id != 'None':
+            try:
+                group_ids.append(int(group4_id))
+            except ValueError:
+                self.toast.show(f"Некорректный ID группы 4: {group4_id}", success=False)
+                return
+
         if len(set(group_ids)) != len(group_ids):
             self.toast.show("Группы не должны повторяться в потоке!", success=False)
             return
@@ -2365,6 +2385,8 @@ class StreamForm:
             stream_data['Группа2_ID'] = group_ids[1]
         if len(group_ids) > 2:
             stream_data['Группа3_ID'] = group_ids[2]
+        if len(group_ids) > 3:
+            stream_data['Группа4_ID'] = group_ids[3]
 
         self.on_submit(stream_data)
 

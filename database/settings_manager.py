@@ -48,8 +48,8 @@ class SettingsManager:
 
     # ========== ПОТОКИ ГРУПП ==========
     def save_stream(self, name: str, group_ids: List[int]) -> bool:
-        if len(group_ids) > 3:
-            raise ValueError("Максимум можно объединить 3 группы")
+        # if len(group_ids) > 4:
+        #     raise ValueError("Максимум можно объединить 4 группы")
 
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
@@ -57,16 +57,17 @@ class SettingsManager:
         group1 = group_ids[0] if len(group_ids) > 0 else None
         group2 = group_ids[1] if len(group_ids) > 1 else None
         group3 = group_ids[2] if len(group_ids) > 2 else None
+        group4 = group_ids[3] if len(group_ids) > 3 else None
 
         return self.db_ops.db.execute_command(
-            """INSERT INTO Потоки (Поток, Группа1_ID, Группа2_ID, Группа3_ID) 
-               VALUES (?, ?, ?, ?)""",
-            (name, group1, group2, group3)
+            """INSERT INTO Потоки (Поток, Группа1_ID, Группа2_ID, Группа3_ID, Группа4_ID) 
+               VALUES (?, ?, ?, ?, ?)""",
+            (name, group1, group2, group3, group4)
         )
 
     def update_stream(self, stream_id: int, name: str, group_ids: List[int]) -> bool:
-        if len(group_ids) > 3:
-            raise ValueError("Максимум можно объединить 3 группы")
+        # if len(group_ids) > 3:
+        #     raise ValueError("Максимум можно объединить 3 группы")
 
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
@@ -74,11 +75,12 @@ class SettingsManager:
         group1 = group_ids[0] if len(group_ids) > 0 else None
         group2 = group_ids[1] if len(group_ids) > 1 else None
         group3 = group_ids[2] if len(group_ids) > 2 else None
+        group4 = group_ids[3] if len(group_ids) > 3 else None
 
         return self.db_ops.db.execute_command(
-            """UPDATE Потоки SET Название = ?, Группа1_ID = ?, Группа2_ID = ?, Группа3_ID = ?
+            """UPDATE Потоки SET Поток = ?, Группа1_ID = ?, Группа2_ID = ?, Группа3_ID = ?, Группа4_ID = ?
                WHERE ID = ?""",
-            (name, group1, group2, group3, stream_id)
+            (name, group1, group2, group3, group4, stream_id)
         )
 
     def delete_stream(self, stream_id: int) -> bool:
@@ -99,11 +101,15 @@ class SettingsManager:
                 г2.Подгруппа as Группа2_Подгруппа,
                 г3.ID as Группа3_ID,
                 г3.Группа as Группа3_Название,
-                г3.Подгруппа as Группа3_Подгруппа
+                г3.Подгруппа as Группа3_Подгруппа,
+                г4.ID as Группа4_ID,  -- НОВАЯ
+                г4.Группа as Группа4_Название,  -- НОВАЯ
+                г4.Подгруппа as Группа4_Подгруппа  -- НОВАЯ
             FROM Потоки п
             LEFT JOIN Группы г1 ON п.Группа1_ID = г1.ID
             LEFT JOIN Группы г2 ON п.Группа2_ID = г2.ID
             LEFT JOIN Группы г3 ON п.Группа3_ID = г3.ID
+            LEFT JOIN Группы г4 ON п.Группа4_ID = г4.ID  -- НОВАЯ
             ORDER BY п.ID
             """
 
@@ -130,6 +136,12 @@ class SettingsManager:
                     group3_name += f" - {stream['Группа3_Подгруппа']}"
                 groups_info.append(group3_name)
 
+            if stream['Группа4_ID']:
+                group4_name = f"{stream['Группа4_Название']}"
+                if stream['Группа4_Подгруппа'] and stream['Группа4_Подгруппа'] != 'Нет':
+                    group4_name += f" - {stream['Группа4_Подгруппа']}"
+                groups_info.append(group4_name)
+
             groups_display = ", ".join(groups_info)
 
             result.append({
@@ -139,6 +151,7 @@ class SettingsManager:
                 'Группа1_ID': stream['Группа1_ID'],
                 'Группа2_ID': stream['Группа2_ID'],
                 'Группа3_ID': stream['Группа3_ID'],
+                'Группа4_ID': stream['Группа4_ID'],
                 'Группы_список': groups_info
             })
 
@@ -154,14 +167,14 @@ class SettingsManager:
     def check_group_in_any_stream(self, group_id: int) -> bool:
         result = self.db_ops.db.execute_query(
             """SELECT COUNT(*) as count FROM Потоки 
-               WHERE Группа1_ID = ? OR Группа2_ID = ? OR Группа3_ID = ?""",
-            (group_id, group_id, group_id)
+               WHERE Группа1_ID = ? OR Группа2_ID = ? OR Группа3_ID = ? OR Группа4_ID = ?""",
+            (group_id, group_id, group_id, group_id)
         )
         return result[0]['count'] > 0 if result else False
 
     def save_stream_with_subjects(self, name: str, group_ids: List[int], subject_ids: List[int]) -> bool:
-        if len(group_ids) > 3:
-            raise ValueError("Максимум можно объединить 3 группы")
+        # if len(group_ids) > 3:
+        #     raise ValueError("Максимум можно объединить 3 группы")
 
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
@@ -173,11 +186,12 @@ class SettingsManager:
             group1 = group_ids[0] if len(group_ids) > 0 else None
             group2 = group_ids[1] if len(group_ids) > 1 else None
             group3 = group_ids[2] if len(group_ids) > 2 else None
+            group4 = group_ids[3] if len(group_ids) > 3 else None
 
             cursor.execute(
-                """INSERT INTO Потоки (Поток, Группа1_ID, Группа2_ID, Группа3_ID) 
-                   VALUES (?, ?, ?, ?)""",
-                (name, group1, group2, group3)
+                """INSERT INTO Потоки (Поток, Группа1_ID, Группа2_ID, Группа3_ID, Группа4_ID) 
+                   VALUES (?, ?, ?, ?, ?)""",
+                (name, group1, group2, group3, group4)
             )
 
             stream_id = cursor.lastrowid
@@ -199,8 +213,8 @@ class SettingsManager:
 
     def update_stream_with_subjects(self, stream_id: int, name: str, group_ids: List[int],
                                     subject_ids: List[int]) -> bool:
-        if len(group_ids) > 3:
-            raise ValueError("Максимум можно объединить 3 группы")
+        # if len(group_ids) > 3:
+        #     raise ValueError("Максимум можно объединить 3 группы")
 
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
@@ -212,11 +226,12 @@ class SettingsManager:
             group1 = group_ids[0] if len(group_ids) > 0 else None
             group2 = group_ids[1] if len(group_ids) > 1 else None
             group3 = group_ids[2] if len(group_ids) > 2 else None
+            group4 = group_ids[3] if len(group_ids) > 3 else None
 
             cursor.execute(
-                """UPDATE Потоки SET Поток = ?, Группа1_ID = ?, Группа2_ID = ?, Группа3_ID = ?
+                """UPDATE Потоки SET Поток = ?, Группа1_ID = ?, Группа2_ID = ?, Группа3_ID = ?, Группа4_ID = ?
                    WHERE ID = ?""",
-                (name, group1, group2, group3, stream_id)
+                (name, group1, group2, group3, group4, stream_id)
             )
 
             cursor.execute("DELETE FROM Поток_Дисциплина WHERE ПотокID = ?", (stream_id,))
