@@ -48,9 +48,6 @@ class SettingsManager:
 
     # ========== ПОТОКИ ГРУПП ==========
     def save_stream(self, name: str, group_ids: List[int]) -> bool:
-        # if len(group_ids) > 4:
-        #     raise ValueError("Максимум можно объединить 4 группы")
-
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
 
@@ -66,9 +63,6 @@ class SettingsManager:
         )
 
     def update_stream(self, stream_id: int, name: str, group_ids: List[int]) -> bool:
-        # if len(group_ids) > 3:
-        #     raise ValueError("Максимум можно объединить 3 группы")
-
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
 
@@ -173,9 +167,6 @@ class SettingsManager:
         return result[0]['count'] > 0 if result else False
 
     def save_stream_with_subjects(self, name: str, group_ids: List[int], subject_ids: List[int]) -> bool:
-        # if len(group_ids) > 3:
-        #     raise ValueError("Максимум можно объединить 3 группы")
-
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
 
@@ -213,9 +204,6 @@ class SettingsManager:
 
     def update_stream_with_subjects(self, stream_id: int, name: str, group_ids: List[int],
                                     subject_ids: List[int]) -> bool:
-        # if len(group_ids) > 3:
-        #     raise ValueError("Максимум можно объединить 3 группы")
-
         if len(set(group_ids)) != len(group_ids):
             raise ValueError("Группы не должны повторяться")
 
