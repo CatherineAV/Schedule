@@ -1,5 +1,6 @@
 import flet as ft
 from typing import Callable, Optional, List, Dict, Any
+from database.settings_manager import SettingsManager
 
 PALETTE = ["#18363E", "#5F97AA", "#2D5F6E", "#3E88A5", "#93C4D1"]
 
@@ -291,10 +292,21 @@ class SearchFilterBar:
     def _load_filter_data(self):
         if self.section_name == "Нагрузка" and self.db_ops:
             self.teachers = self.db_ops.get_table_data("Преподаватели")
+            self.teachers.sort(key=lambda x: x['ФИО'].lower())
             self.subjects = self.db_ops.get_subjects_with_module_names()
+            self.subjects.sort(key=lambda x: (
+                x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+            settings_manager = SettingsManager(self.db_ops)
+            groups_with_order = settings_manager.get_groups_with_exclusion_and_order()
+            order_dict = {g['ID']: g['Порядок'] for g in groups_with_order}
             self.groups = self.db_ops.get_groups()
+            self.groups.sort(key=lambda g: (
+                order_dict.get(g['ID'], 999),
+                g['Группа'].lower(),
+                g['Подгруппа'].lower() if g['Подгруппа'] != 'Нет' else ''))
         elif self.section_name == "Дисциплины" and self.db_ops:
             self.modules = self.db_ops.get_modules()
+            self.modules.sort(key=lambda x: x['Код'].lower())
 
     def _create_filter_dialog_content(self):
         if self.section_name == "Нагрузка":

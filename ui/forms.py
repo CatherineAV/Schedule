@@ -2,6 +2,7 @@ import flet as ft
 import re
 from typing import Callable, List, Dict, Optional
 from ui.components import PALETTE, Validator
+from database.settings_manager import SettingsManager
 
 
 class GroupForm:
@@ -1374,12 +1375,25 @@ class WorkloadForm:
         self.edit_mode = edit_mode
         self.original_data = workload_data.copy() if workload_data else {}
 
+        self.settings_manager = SettingsManager(db_operations)
+
         teachers = self.db_operations.get_table_data("Преподаватели")
+        teachers.sort(key=lambda x: x['ФИО'].lower())
+        teacher_options = [ft.dropdown.Option(t['ФИО'], t['ФИО']) for t in teachers]
+
         subjects = self.db_operations.get_subjects_with_module_names()
+        subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+        subject_options = [ft.dropdown.Option(s['Дисциплина'], s['Дисциплина']) for s in subjects]
+
         groups = self.db_operations.get_groups()
 
-        teacher_options = [ft.dropdown.Option(t['ФИО'], t['ФИО']) for t in teachers]
-        subject_options = [ft.dropdown.Option(s['Дисциплина'], s['Дисциплина']) for s in subjects]
+        groups_with_order = self.settings_manager.get_groups_with_exclusion_and_order()
+        order_dict = {g['ID']: g['Порядок'] for g in groups_with_order}
+        groups.sort(key=lambda g: (
+            order_dict.get(g['ID'], 999),
+            g['Группа'].lower(),
+            g['Подгруппа'].lower() if g['Подгруппа'] != 'Нет' else ''
+        ))
 
         group_options = []
         for group in groups:
@@ -1441,7 +1455,6 @@ class WorkloadForm:
             keyboard_type=ft.KeyboardType.NUMBER,
         )
 
-        # Сообщения если нет данных
         self.no_teachers_message = ft.Text(
             "Сначала добавьте преподавателей",
             size=14,
@@ -1619,15 +1632,27 @@ class MultiWorkloadForm:
         self.toast = toast
         self.edit_mode = edit_mode
 
+        self.settings_manager = SettingsManager(db_operations)
         self.workload_rows = []
         self.max_rows = 25
         self.current_rows = 1
 
         self.teachers = self.db_operations.get_table_data("Преподаватели")
-        self.subjects = self.db_operations.get_subjects_with_module_names()
-        self.groups = self.db_operations.get_groups()
-
+        self.teachers.sort(key=lambda x: x['ФИО'].lower())
         teacher_options = [ft.dropdown.Option(t['ФИО'], t['ФИО']) for t in self.teachers]
+
+        self.subjects = self.db_operations.get_subjects_with_module_names()
+        self.subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+
+        self.groups = self.db_operations.get_groups()
+        groups_with_order = self.settings_manager.get_groups_with_exclusion_and_order()
+        order_dict = {g['ID']: g['Порядок'] for g in groups_with_order}
+
+        self.groups.sort(key=lambda g: (
+            order_dict.get(g['ID'], 999),
+            g['Группа'].lower(),
+            g['Подгруппа'].lower() if g['Подгруппа'] != 'Нет' else ''
+        ))
 
         self.teacher_dropdown = ft.Dropdown(
             label="Преподаватель *",
@@ -1652,7 +1677,7 @@ class MultiWorkloadForm:
             tooltip=f"Максимум {self.max_rows} строк"
         )
 
-        self._add_initial_row()
+        self._create_workload_row()
 
         self.no_teachers_message = ft.Text(
             "Сначала добавьте преподавателей",
@@ -1675,12 +1700,10 @@ class MultiWorkloadForm:
             visible=len(self.groups) == 0
         )
 
-    def _add_initial_row(self):
-        self._create_workload_row()
-
     def _create_workload_row(self, row_data: Optional[Dict] = None):
         row_id = len(self.workload_rows)
 
+        self.subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
         subject_options = [ft.dropdown.Option(s['Дисциплина'], s['Дисциплина']) for s in self.subjects]
         subject_dropdown = ft.Dropdown(
             label="Дисциплина *",
@@ -2017,8 +2040,17 @@ class StreamForm:
         self.edit_mode = edit_mode
         self.original_stream_name = stream_data['Поток'] if stream_data and edit_mode else ""
 
+        self.settings_manager = SettingsManager(db_operations)
         all_groups = self.db_operations.get_groups()
+        groups_with_order = self.settings_manager.get_groups_with_exclusion_and_order()
+        order_dict = {g['ID']: g['Порядок'] for g in groups_with_order}
+        all_groups.sort(key=lambda g: (
+            order_dict.get(g['ID'], 999),
+            g['Группа'].lower(),
+            g['Подгруппа'].lower() if g['Подгруппа'] != 'Нет' else ''
+        ))
         all_subjects = self.db_operations.get_subjects_with_module_names()
+        all_subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
 
         self.group_options = []
         for group in all_groups:

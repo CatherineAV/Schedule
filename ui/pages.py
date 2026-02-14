@@ -1383,6 +1383,7 @@ class SettingsPage(BasePage):
             'Группа1_ID': stream.get('Группа1_ID'),
             'Группа2_ID': stream.get('Группа2_ID'),
             'Группа3_ID': stream.get('Группа3_ID'),
+            'Группа4_ID': stream.get('Группа4_ID'),
             'Дисциплины_ID': stream.get('Дисциплины_ID', []),
             'Дисциплины_список': stream.get('Дисциплины_список', [])
         }
