@@ -985,13 +985,13 @@ class DataPane(BasePage):
 
             if success_count > 0:
                 if error_count > 0:
-                    self.toast.show(f"Добавлено {success_count} из {len(workloads_data)} нагрузок. "
-                                    f"{error_count} не добавлено.", success=True)
+                    self.toast.show(f"Нагрузка в количестве {success_count} из {len(workloads_data)} "
+                                    f"успешно добавлена. Количество {error_count} не добавлено.", success=True)
                 else:
-                    self.toast.show(f"Успешно добавлено {success_count} нагрузок!", success=True)
+                    self.toast.show(f"Нагрузка в количестве {success_count} успешно добавлена!", success=True)
                 self.render("Нагрузка")
             else:
-                self.toast.show("Не удалось добавить ни одной нагрузки!", success=False)
+                self.toast.show("Не удалось добавить запись!", success=False)
 
         def on_form_cancel(e):
             self.render("Нагрузка")
