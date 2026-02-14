@@ -1,4 +1,5 @@
 import flet as ft
+import threading
 from typing import Callable, Optional, List, Dict, Any
 from database.settings_manager import SettingsManager
 
@@ -33,7 +34,6 @@ class Toast:
                 self.page.overlay.remove(toast)
                 self.page.update()
 
-        import threading
         threading.Thread(target=remove_toast, daemon=True).start()
 
 
@@ -319,7 +319,7 @@ class SearchFilterBar:
     def _create_subject_filters(self):
         if not self.modules:
             return ft.Column([
-                ft.Text("Фильтрация дисциплин", size=18, weight="bold", color=PALETTE[2]),
+                ft.Text("Фильтрация данных", size=18, weight="bold", color=PALETTE[2]),
                 ft.Divider(height=10, color=PALETTE[1]),
                 ft.Text("Модули не найдены", color=ft.Colors.ORANGE_700),
             ], spacing=15, width=400)
@@ -349,7 +349,7 @@ class SearchFilterBar:
             self.filter_controls[f'module_{module_code}'] = checkbox
 
         return ft.Column([
-            ft.Text("Фильтрация дисциплин по модулям", size=18, weight="bold", color=PALETTE[2]),
+            ft.Text("Фильтрация данных", size=18, weight="bold", color=PALETTE[2]),
             ft.Divider(height=10, color=PALETTE[1]),
             ft.Text("Выберите модули для отображения:", color=PALETTE[2]),
             ft.Container(
@@ -461,7 +461,7 @@ class SearchFilterBar:
         self.filter_controls['group'] = group_dropdown
 
         return ft.Column([
-            ft.Text("Фильтрация нагрузки", size=18, weight="bold", color=PALETTE[2]),
+            ft.Text("Фильтрация данных", size=18, weight="bold", color=PALETTE[2]),
             ft.Divider(height=10, color=PALETTE[1]),
             ft.Text("Выберите критерии фильтрации:", color=PALETTE[2]),
             ft.Container(height=10),
@@ -520,12 +520,15 @@ class SearchFilterBar:
                 content=filter_content,
                 width=500,
                 height=dialog_height,
+                bgcolor=ft.Colors.WHITE,
             ),
             actions=[
                 ft.TextButton("Сбросить", on_click=self._reset_filters),
                 ft.TextButton("Применить", on_click=self._apply_filters),
                 ft.TextButton("Отмена", on_click=self._close_filter_dialog),
             ],
+            actions_alignment=ft.MainAxisAlignment.END,
+            bgcolor=ft.Colors.WHITE,
         )
 
         self.page.overlay.append(self.filter_dialog)
@@ -816,3 +819,25 @@ def _is_same_module(db_operations, module_code: str, name: str) -> bool:
         if module['Код'] == module_code:
             return module['Код'].upper() == name.upper()
     return False
+
+
+def create_styled_dialog(title: str, content: str, on_confirm, on_cancel) -> ft.AlertDialog:
+    return ft.AlertDialog(
+        modal=True,
+        title=ft.Text(title, color=PALETTE[2], weight="bold"),
+        content=ft.Text(content, color=PALETTE[2]),
+        actions=[
+            ft.TextButton(
+                "Да",
+                on_click=on_confirm,
+                style=ft.ButtonStyle(color=PALETTE[3])
+            ),
+            ft.TextButton(
+                "Нет",
+                on_click=on_cancel,
+                style=ft.ButtonStyle(color=PALETTE[2])
+            ),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+        bgcolor=ft.Colors.WHITE,
+    )

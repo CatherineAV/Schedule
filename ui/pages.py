@@ -89,7 +89,6 @@ class MainMenu(BasePage):
             self.toast.show(f"Ошибка при генерации: {str(ex)}", success=False)
 
     def _create_loading_screen(self, message: str) -> ft.Column:
-        """Создает экран загрузки"""
         return ft.Column([
             ft.Text("Генерация шаблона", size=24, weight="bold", color=PALETTE[2]),
             ft.Divider(height=20, color=PALETTE[1]),
@@ -132,7 +131,6 @@ class MainMenu(BasePage):
         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
     def _create_error_screen(self, error_message: str) -> ft.Column:
-        """Создает экран ошибки"""
         return ft.Column([
             ft.Text("Ошибка генерации", size=24, weight="bold", color=ft.Colors.RED),
             ft.Divider(height=20, color=PALETTE[1]),
