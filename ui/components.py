@@ -261,6 +261,7 @@ class SearchFilterBar:
 
         self.search_field = ft.TextField(
             hint_text="Поиск...",
+            hint_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             expand=True,
@@ -294,8 +295,7 @@ class SearchFilterBar:
             self.teachers = self.db_ops.get_table_data("Преподаватели")
             self.teachers.sort(key=lambda x: x['ФИО'].lower())
             self.subjects = self.db_ops.get_subjects_with_module_names()
-            self.subjects.sort(key=lambda x: (
-                x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+            self.subjects.sort(key=lambda x: x['Дисциплина'].lower())
             settings_manager = SettingsManager(self.db_ops)
             groups_with_order = settings_manager.get_groups_with_exclusion_and_order()
             order_dict = {g['ID']: g['Порядок'] for g in groups_with_order}
@@ -474,6 +474,7 @@ class SearchFilterBar:
             ft.Checkbox(
                 label="Показывать только с подгруппами",
                 value=self.current_filters.get('with_subgroups_only', False),
+                label_style=ft.TextStyle(color=PALETTE[2]),
                 on_change=lambda e: self._update_filter('with_subgroups_only', e.control.value)
             ),
         ], spacing=5, width=400, scroll=ft.ScrollMode.AUTO)
@@ -523,9 +524,9 @@ class SearchFilterBar:
                 bgcolor=ft.Colors.WHITE,
             ),
             actions=[
-                ft.TextButton("Сбросить", on_click=self._reset_filters),
-                ft.TextButton("Применить", on_click=self._apply_filters),
-                ft.TextButton("Отмена", on_click=self._close_filter_dialog),
+                ft.TextButton("Сбросить", on_click=self._reset_filters, style=ft.ButtonStyle(color=PALETTE[2])),
+                ft.TextButton("Применить", on_click=self._apply_filters, style=ft.ButtonStyle(color=PALETTE[2])),
+                ft.TextButton("Отмена", on_click=self._close_filter_dialog, style=ft.ButtonStyle(color=PALETTE[2])),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
             bgcolor=ft.Colors.WHITE,

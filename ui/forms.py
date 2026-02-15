@@ -23,6 +23,7 @@ class GroupForm:
 
         self.group_name_field = ft.TextField(
             label="Группа",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=group_data['Группа'] if group_data and edit_mode else "",
@@ -34,7 +35,8 @@ class GroupForm:
 
         self.subgroup_dropdown = ft.Dropdown(
             label="Подгруппа",
-            width=300,
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
+            width=400,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
             color=PALETTE[2],
@@ -49,7 +51,8 @@ class GroupForm:
 
         self.self_education_dropdown = ft.Dropdown(
             label="День самообразования",
-            width=300,
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
+            width=400,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
             color=PALETTE[2],
@@ -216,6 +219,7 @@ class SubjectForm:
 
         self.subject_name_field = ft.TextField(
             label="Название дисциплины",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             color=PALETTE[2],
@@ -230,6 +234,7 @@ class SubjectForm:
 
         self.module_dropdown = ft.Dropdown(
             label="Модуль",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -248,6 +253,7 @@ class SubjectForm:
 
         self.new_module_code_field = ft.TextField(
             label="Код нового модуля",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             color=PALETTE[2],
@@ -256,6 +262,7 @@ class SubjectForm:
 
         self.new_module_name_field = ft.TextField(
             label="Название нового модуля",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             color=PALETTE[2],
@@ -264,6 +271,7 @@ class SubjectForm:
 
         self.territory_dropdown1 = ft.Dropdown(
             label="Основная территория",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -297,6 +305,7 @@ class SubjectForm:
 
         self.territory_dropdown2 = ft.Dropdown(
             label="Дополнительная территория (необязательно)",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -418,6 +427,7 @@ class SubjectForm:
                 checkbox = ft.Checkbox(
                     label=classroom['Кабинет'],
                     value=is_checked,
+                    border_side=ft.BorderSide(width=2, color=PALETTE[2]),
                     label_style=ft.TextStyle(color=PALETTE[2]),
                     on_change=lambda e, classroom_id=classroom['ID']: self._on_classroom_change(classroom_id,
                                                                                                 e.control.value)
@@ -456,6 +466,7 @@ class SubjectForm:
                 checkbox = ft.Checkbox(
                     label=classroom['Кабинет'],
                     value=is_checked,
+                    border_side=ft.BorderSide(width=2, color=PALETTE[2]),
                     label_style=ft.TextStyle(color=PALETTE[2]),
                     on_change=lambda e, classroom_id=classroom['ID']: self._on_classroom_change(classroom_id,
                                                                                                 e.control.value)
@@ -704,6 +715,7 @@ class ModuleForm:
 
         self.module_code_field = ft.TextField(
             label="Код модуля",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=module_data['Код'] if module_data and edit_mode else "",
@@ -711,6 +723,7 @@ class ModuleForm:
 
         self.module_name_field = ft.TextField(
             label="Название модуля",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=module_data['Название'] if module_data and edit_mode else "",
@@ -811,6 +824,7 @@ class ClassroomForm:
 
         self.classroom_number_field = ft.TextField(
             label="Номер кабинета",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=classroom_data['Кабинет'] if classroom_data and edit_mode else "",
@@ -821,6 +835,7 @@ class ClassroomForm:
 
         self.territory_dropdown = ft.Dropdown(
             label="Территория",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -831,6 +846,7 @@ class ClassroomForm:
 
         self.capacity_field = ft.TextField(
             label="Вместимость (опционально)",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=str(classroom_data.get('Вместимость', '')) if classroom_data and edit_mode else "",
@@ -952,6 +968,7 @@ class TeacherForm:
 
         self.full_name_field = ft.TextField(
             label="ФИО преподавателя",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=teacher_data['ФИО'] if teacher_data and edit_mode else "",
@@ -967,6 +984,7 @@ class TeacherForm:
 
         self.territory_dropdown1 = ft.Dropdown(
             label="Основная территория",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -976,6 +994,7 @@ class TeacherForm:
 
         self.territory_dropdown2 = ft.Dropdown(
             label="Дополнительная территория (необязательно)",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -1025,7 +1044,7 @@ class TeacherForm:
                     label=day_name,
                     value=day_code in self.selected_days,
                     label_style=ft.TextStyle(color=PALETTE[2]),
-                    border_side=ft.BorderSide(width=1, color=PALETTE[2]),
+                    border_side=ft.BorderSide(width=2, color=PALETTE[2]),
                     on_change=lambda e, d=day_code: self._on_day_change(d, e.control.value)
                 )
                 self.day_checkboxes[day_code] = checkbox
@@ -1211,6 +1230,7 @@ class TerritoryForm:
 
         self.territory_name_field = ft.TextField(
             label="Название территории",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=territory_data['Территория'] if territory_data and edit_mode else "",
@@ -1228,6 +1248,7 @@ class TerritoryForm:
 
         self.color_hex_field = ft.TextField(
             label="HEX код цвета",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             value=initial_color,
             border_color=PALETTE[3],
             color=PALETTE[2],
@@ -1382,7 +1403,7 @@ class WorkloadForm:
         teacher_options = [ft.dropdown.Option(t['ФИО'], t['ФИО']) for t in teachers]
 
         subjects = self.db_operations.get_subjects_with_module_names()
-        subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+        subjects.sort(key=lambda x: x['Дисциплина'].lower())
         subject_options = [ft.dropdown.Option(s['Дисциплина'], s['Дисциплина']) for s in subjects]
 
         groups = self.db_operations.get_groups()
@@ -1408,6 +1429,7 @@ class WorkloadForm:
         teacher_value = workload_data.get('Преподаватель', '') if workload_data else ''
         self.teacher_dropdown = ft.Dropdown(
             label="Преподаватель",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -1419,6 +1441,7 @@ class WorkloadForm:
         subject_value = workload_data.get('Дисциплина', '') if workload_data else ''
         self.subject_dropdown = ft.Dropdown(
             label="Дисциплина",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -1438,6 +1461,7 @@ class WorkloadForm:
 
         self.group_dropdown = ft.Dropdown(
             label="Группа",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -1449,6 +1473,7 @@ class WorkloadForm:
         hours_value = str(workload_data.get('Часы в неделю', '')) if workload_data else ''
         self.hours_field = ft.TextField(
             label="Часы в неделю",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=hours_value,
@@ -1642,7 +1667,7 @@ class MultiWorkloadForm:
         teacher_options = [ft.dropdown.Option(t['ФИО'], t['ФИО']) for t in self.teachers]
 
         self.subjects = self.db_operations.get_subjects_with_module_names()
-        self.subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+        self.subjects.sort(key=lambda x: x['Дисциплина'].lower())
 
         self.groups = self.db_operations.get_groups()
         groups_with_order = self.settings_manager.get_groups_with_exclusion_and_order()
@@ -1656,6 +1681,7 @@ class MultiWorkloadForm:
 
         self.teacher_dropdown = ft.Dropdown(
             label="Преподаватель *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -1703,10 +1729,11 @@ class MultiWorkloadForm:
     def _create_workload_row(self, row_data: Optional[Dict] = None):
         row_id = len(self.workload_rows)
 
-        self.subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+        #self.subjects.sort(key=lambda x: x['Дисциплина'].lower())
         subject_options = [ft.dropdown.Option(s['Дисциплина'], s['Дисциплина']) for s in self.subjects]
         subject_dropdown = ft.Dropdown(
             label="Дисциплина *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -1727,6 +1754,7 @@ class MultiWorkloadForm:
 
         group_dropdown = ft.Dropdown(
             label="Группа *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -1737,6 +1765,7 @@ class MultiWorkloadForm:
 
         hours_field = ft.TextField(
             label="Часы в неделю *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             color=PALETTE[2],
@@ -2050,7 +2079,7 @@ class StreamForm:
             g['Подгруппа'].lower() if g['Подгруппа'] != 'Нет' else ''
         ))
         all_subjects = self.db_operations.get_subjects_with_module_names()
-        all_subjects.sort(key=lambda x: (x['Код модуля'].lower() if x['Код модуля'] else '', x['Дисциплина'].lower()))
+        all_subjects.sort(key=lambda x: x['Дисциплина'].lower())
 
         self.group_options = []
         for group in all_groups:
@@ -2078,6 +2107,7 @@ class StreamForm:
 
         self.stream_name_field = ft.TextField(
             label="Название потока",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             border_color=PALETTE[3],
             color=PALETTE[2],
             value=stream_data['Поток'] if stream_data and edit_mode else "",  # ← Изменили ключ
@@ -2085,6 +2115,7 @@ class StreamForm:
 
         self.group1_dropdown = ft.Dropdown(
             label="Группа 1 *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -2096,6 +2127,7 @@ class StreamForm:
 
         self.group2_dropdown = ft.Dropdown(
             label="Группа 2 *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -2107,6 +2139,7 @@ class StreamForm:
 
         self.group3_dropdown = ft.Dropdown(
             label="Группа 3 (необязательно)",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -2118,6 +2151,7 @@ class StreamForm:
 
         self.group4_dropdown = ft.Dropdown(
             label="Группа 4 (необязательно)",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -2129,6 +2163,7 @@ class StreamForm:
 
         self.subjects_dropdown = ft.Dropdown(
             label="Дисциплины для объединения *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -2334,6 +2369,7 @@ class StreamForm:
 
         new_dropdown = ft.Dropdown(
             label="Дисциплины для объединения *",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             expand=True,
             border_color=PALETTE[3],
             bgcolor=ft.Colors.BLUE_GREY,
@@ -2451,6 +2487,7 @@ class GroupsManagementForm:
 
         self.order_text_field = ft.TextField(
             label="Порядок групп (ID через запятую)",
+            label_style=ft.TextStyle(color=ft.Colors.GREY_400),
             multiline=True,
             min_lines=3,
             max_lines=6,
@@ -2497,6 +2534,7 @@ class GroupsManagementForm:
                 ft.Checkbox(
                     value=group['Исключена'],
                     on_change=lambda e, gid=group_id: self._on_exclusion_change(gid, e.control.value),
+                    border_side=ft.BorderSide(width=2, color=PALETTE[2]),
                     label_style=ft.TextStyle(color=PALETTE[2])
                 ),
                 ft.Text(

@@ -42,10 +42,7 @@ class SimpleTemplateGenerator:
         ws = wb.active
         ws.title = "Расписание I семестр"
 
-        # Получаем активные группы в правильном порядке
         active_groups = self._get_active_groups()
-
-        # Формируем структуру групп с учетом подгрупп
         group_structure = self._build_group_structure(active_groups)
 
         # ========== ШАПКА ДОКУМЕНТА ==========
@@ -54,11 +51,11 @@ class SimpleTemplateGenerator:
         # ========== ЗАГОЛОВОК ТАБЛИЦЫ ==========
         self._create_table_header(ws, group_structure)
 
-        # ========== ДНИ И УРОКИ ==========
-        self._create_days_and_lessons(ws)
+        # ========== ДНИ И УРОКИ с учетом самообразования ==========
+        self._create_days_and_lessons(ws, group_structure)
 
         # ========== ПОДВАЛ ==========
-        self._create_footer(ws)
+        # self._create_footer(ws)
 
         # ========== НАСТРОЙКА СТИЛЕЙ ==========
         self._apply_styles(ws)
@@ -69,25 +66,14 @@ class SimpleTemplateGenerator:
         return os.path.abspath(output_path)
 
     def _get_active_groups(self) -> List[Dict[str, Any]]:
-        """
-        Получает активные группы в порядке, заданном в настройках
-        """
+
         groups = self.settings_manager.get_groups_with_exclusion_and_order()
-
-        # Фильтруем исключенные группы
         active_groups = [g for g in groups if not g['Исключена']]
-
-        # Сортируем по порядку из настроек
         active_groups.sort(key=lambda x: x['Порядок'])
 
         return active_groups
 
     def _build_group_structure(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Строит структуру групп с учетом подгрупп
-        Группирует группы по названию и собирает все их подгруппы
-        """
-        # Группируем группы по названию
         grouped = {}
 
         for group in groups:
@@ -107,50 +93,39 @@ class SimpleTemplateGenerator:
                 grouped[name]['subgroups'].append(subgroup)
                 grouped[name]['has_subgroups'] = True
 
-        # Преобразуем в список и сортируем подгруппы
         structure = []
         for name, group_info in grouped.items():
             if group_info['has_subgroups']:
-                # Сортируем подгруппы в правильном порядке
                 subgroups = group_info['subgroups']
 
-                # Специальная сортировка для разных типов групп
                 if 'ХКО' in name.upper():
-                    # Для ХКО: Женская, Мужская
                     order = {'Женская': 1, 'Мужская': 2}
                     subgroups.sort(key=lambda x: order.get(x, 999))
                 elif 'ХБО' in name.upper():
-                    # Для ХБО: Кукольники, Бутафоры
                     order = {'Кукольники': 1, 'Бутафоры': 2}
                     subgroups.sort(key=lambda x: order.get(x, 999))
                 else:
-                    # Для обычных групп: 1, 2, 3
                     subgroups.sort(key=lambda x: int(x) if x.isdigit() else 999)
 
                 group_info['subgroups'] = subgroups
                 structure.append(group_info)
             else:
-                # Группа без подгрупп
                 structure.append({
                     'name': name,
                     'subgroups': [],
                     'has_subgroups': False,
-                    'colspan': 1
+                    'self_education': group_info['self_education']
                 })
 
         return structure
 
     def _create_document_header(self, ws):
-        """
-        Создает шапку документа
-        """
-        # Заголовок
+
         ws.merge_cells('A1:CN1')
         ws['A1'] = 'Расписание занятий в I полугодии 2025/26 учебного года'
         ws['A1'].font = Font(size=16, bold=True)
         ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
 
-        # Утверждаю
         ws.merge_cells('AP3:AP5')
         ws['AP3'] = 'УТВЕРЖДАЮ'
         ws['AP3'].font = Font(bold=True)
@@ -170,58 +145,53 @@ class SimpleTemplateGenerator:
         ws['AP10'].alignment = Alignment(horizontal='center', vertical='center')
 
     def _create_table_header(self, ws, group_structure: List[Dict[str, Any]]):
-        """
-        Создает заголовок таблицы с группами
-        Название группы объединяется на количество подгрупп
-        Подгруппы пишутся каждая в своей ячейке
-        """
-        header_row = 12  # Строка с названиями групп
-        subgroup_row = 13  # Строка с подгруппами
 
-        # Фиксированные колонки
-        ws[f'A{header_row}'] = 'Дни'
-        ws[f'B{header_row}'] = 'Уроки'
-        ws[f'C{header_row}'] = 'Расписание звонков на ул. Радио'
+        header_row = 12
+        subgroup_row = 13
 
-        # Стиль для фиксированных заголовков
-        for col in ['A', 'B', 'C']:
+        fixed_columns = ['A', 'B', 'C']
+
+        for col in fixed_columns:
+            merge_range = f'{col}{header_row}:{col}{subgroup_row}'
+            ws.merge_cells(merge_range)
+
+            if col == 'A':
+                ws[f'{col}{header_row}'] = 'Дни'
+            elif col == 'B':
+                ws[f'{col}{header_row}'] = 'Уроки'
+            elif col == 'C':
+                ws[f'{col}{header_row}'] = 'Расписание звонков на ул. Радио'
+
             cell = ws[f'{col}{header_row}']
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-        # Начинаем с колонки D
         current_col = 4
 
         for group in group_structure:
             if group['has_subgroups']:
-                # Количество подгрупп = количество колонок
                 subgroup_count = len(group['subgroups'])
 
-                # Объединяем ячейки для названия группы
                 start_col = current_col
                 end_col = current_col + subgroup_count - 1
 
                 start_letter = get_column_letter(start_col)
                 end_letter = get_column_letter(end_col)
 
-                # Объединяем ячейки
                 merge_range = f'{start_letter}{header_row}:{end_letter}{header_row}'
                 ws.merge_cells(merge_range)
 
-                # Устанавливаем название группы
                 group_cell = ws[f'{start_letter}{header_row}']
                 group_cell.value = group['name']
                 group_cell.font = Font(bold=True)
                 group_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                # Заполняем подгруппы каждая в своей колонке
                 for i, subgroup in enumerate(group['subgroups']):
                     col = current_col + i
                     col_letter = get_column_letter(col)
 
                     sub_cell = ws[f'{col_letter}{subgroup_row}']
 
-                    # Форматируем отображение подгруппы
                     if subgroup in ['1', '2', '3']:
                         sub_cell.value = f'{subgroup} п/гр'
                     elif subgroup == 'Женская':
@@ -238,110 +208,203 @@ class SimpleTemplateGenerator:
                     sub_cell.font = Font(italic=True)
                     sub_cell.alignment = Alignment(horizontal='center', vertical='center')
 
-                # Сдвигаем текущую колонку на количество подгрупп
                 current_col += subgroup_count
 
             else:
-                # Группа без подгрупп - одна колонка
                 col_letter = get_column_letter(current_col)
 
-                # Название группы
+                merge_range = f'{col_letter}{header_row}:{col_letter}{subgroup_row}'
+                ws.merge_cells(merge_range)
+
                 group_cell = ws[f'{col_letter}{header_row}']
                 group_cell.value = group['name']
                 group_cell.font = Font(bold=True)
                 group_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                # В строке подгрупп оставляем пусто или ставим прочерк
-                sub_cell = ws[f'{col_letter}{subgroup_row}']
-                sub_cell.value = ''
-                sub_cell.font = Font(italic=True)
-                sub_cell.alignment = Alignment(horizontal='center', vertical='center')
-
                 current_col += 1
 
-    def _create_days_and_lessons(self, ws):
-        """
-        Создает строки с днями недели (вертикально) и уроками
-        """
+    def _create_days_and_lessons(self, ws, group_structure: List[Dict[str, Any]]):
+
         start_row = 14
 
-        for day_idx, day_letter in enumerate(self.days_order):
-            # Определяем диапазон строк для этого дня (11 уроков)
+        day_mapping = {
+            'Пн': 'пн', 'ПН': 'пн', 'пн': 'пн',
+            'Вт': 'вт', 'ВТ': 'вт', 'вт': 'вт',
+            'Ср': 'ср', 'СР': 'ср', 'ср': 'ср',
+            'Чт': 'чт', 'ЧТ': 'чт', 'чт': 'чт',
+            'Пт': 'пт', 'ПТ': 'пт', 'пт': 'пт',
+            'Сб': 'сб', 'СБ': 'сб', 'сб': 'сб'
+        }
+
+        for day_idx, day_code in enumerate(self.days_order):
             day_start_row = start_row + (day_idx * 11)
             day_end_row = day_start_row + 10
 
-            # Получаем вертикальное написание дня
-            day_vertical = self.days_vertical[day_letter]
+            merge_range = f'A{day_start_row}:A{day_end_row}'
+            ws.merge_cells(merge_range)
 
-            # Очищаем объединенные ячейки если были
-            for row in range(day_start_row, day_end_row + 1):
-                ws[f'A{row}'] = None
+            day_letters = self.days_vertical[day_code]
+            vertical_text = '\n'.join(day_letters).upper()
 
-            # Заполняем каждую букву в отдельной строке
-            for i, letter in enumerate(day_vertical):
-                if i < 11:  # Не более 11 строк
-                    row = day_start_row + i
-                    cell = ws.cell(row=row, column=1)
-                    cell.value = letter
-                    cell.alignment = Alignment(
-                        horizontal='center',
-                        vertical='center'
-                    )
-                    cell.font = Font(bold=True)
+            day_cell = ws[f'A{day_start_row}']
+            day_cell.value = vertical_text
+            day_cell.alignment = Alignment(
+                horizontal='center',
+                vertical='center',
+                wrap_text=True
+            )
+            day_cell.font = Font(bold=True)
 
-            # Заполняем уроки и время для всех 11 строк
+            current_col = 4
+
+            for group in group_structure:
+                self_education = group.get('self_education')
+
+                if self_education and self_education != 'Нет' and self_education != 'None':
+                    self_ed_code = day_mapping.get(self_education)
+
+                    if self_ed_code == day_code:
+                        if group['has_subgroups']:
+                            subgroup_count = len(group['subgroups'])
+
+                            start_col = current_col
+                            end_col = current_col + subgroup_count - 1
+
+                            start_letter = get_column_letter(start_col)
+                            end_letter = get_column_letter(end_col)
+
+                            merge_range = f'{start_letter}{day_start_row}:{end_letter}{day_end_row}'
+                            ws.merge_cells(merge_range)
+
+                            cell = ws[f'{start_letter}{day_start_row}']
+                            cell.value = "День самообразования"
+                            cell.alignment = Alignment(
+                                horizontal='center',
+                                vertical='center',
+                                wrap_text=True
+                            )
+                            cell.font = Font(italic=True, bold=True, size=10)
+
+                            current_col += subgroup_count
+                        else:
+                            col_letter = get_column_letter(current_col)
+
+                            merge_range = f'{col_letter}{day_start_row}:{col_letter}{day_end_row}'
+                            ws.merge_cells(merge_range)
+
+                            cell = ws[f'{col_letter}{day_start_row}']
+                            cell.value = "День самообразования"
+                            cell.alignment = Alignment(
+                                horizontal='center',
+                                vertical='center',
+                                wrap_text=True
+                            )
+                            cell.font = Font(italic=True, bold=True, size=10)
+
+                            current_col += 1
+                    else:
+                        if group['has_subgroups']:
+                            current_col += len(group['subgroups'])
+                        else:
+                            current_col += 1
+                else:
+                    if group['has_subgroups']:
+                        current_col += len(group['subgroups'])
+                    else:
+                        current_col += 1
+
             for lesson_idx in range(11):
                 row = day_start_row + lesson_idx
 
-                # Номер урока
                 ws.cell(row=row, column=2, value=lesson_idx + 1)
                 ws.cell(row=row, column=2).alignment = Alignment(horizontal='center', vertical='center')
 
-                # Время урока
                 ws.cell(row=row, column=3, value=self.lesson_times[lesson_idx])
                 ws.cell(row=row, column=3).alignment = Alignment(horizontal='center', vertical='center')
 
-    def _create_footer(self, ws):
-        """
-        Создает подвал документа
-        """
-        # Находим последнюю использованную строку
-        last_row = ws.max_row + 3
-
-        # Подпись заместителя директора
-        ws.merge_cells(f'CH{last_row}:CN{last_row}')
-        ws[f'CH{last_row}'] = 'Заместитель директора по УР________________Соломина И.Д.'
-        ws[f'CH{last_row}'].alignment = Alignment(horizontal='right')
-
-        # Адреса территорий
-        addr_row = last_row + 2
-        ws.merge_cells(f'D{addr_row}:H{addr_row}')
-        ws[f'D{addr_row}'] = 'Ул. Радио, д. 6/4, стр.1'
-        ws[f'D{addr_row}'].font = Font(italic=True)
-
-        ws.merge_cells(f'T{addr_row}:X{addr_row}')
-        ws[f'T{addr_row}'] = '1-й Амбулаторный проезд, д. 8, стр. 2'
-        ws[f'T{addr_row}'].font = Font(italic=True)
-
-        ws.merge_cells(f'AJ{addr_row}:AN{addr_row}')
-        ws[f'AJ{addr_row}'] = 'Московский драматический театр им. М.Н. Ермоловой'
-        ws[f'AJ{addr_row}'].font = Font(italic=True)
+    # def _create_footer(self, ws):
+    #     last_row = ws.max_row + 3
+    #
+    #     ws.merge_cells(f'CH{last_row}:CN{last_row}')
+    #     ws[f'CH{last_row}'] = 'Заместитель директора по УР________________Соломина И.Д.'
+    #     ws[f'CH{last_row}'].alignment = Alignment(horizontal='right')
 
     def _apply_styles(self, ws):
-        """
-        Применяет стили к таблице (только границы, без заливки)
-        """
-        # Применяем границы ко всей таблице
-        for row in ws.iter_rows(min_row=12, max_row=ws.max_row - 5, max_col=50):
-            for cell in row:
-                if cell.value is not None or (cell.row >= 14 and cell.column >= 4):
-                    cell.border = self.thin_border
+        last_row = 14 + (6 * 11) - 1
+
+        last_col = 3
+
+        for col in range(4, 100):
+            col_letter = get_column_letter(col)
+
+            cell_row12 = ws[f'{col_letter}12']
+            cell_row13 = ws[f'{col_letter}13']
+
+            if not cell_row12.value and not cell_row13.value:
+                last_col = col - 1
+                break
+
+        if last_col == 3:
+            has_any_group = False
+            for col in range(4, 30):
+                col_letter = get_column_letter(col)
+                if ws[f'{col_letter}12'].value or ws[f'{col_letter}13'].value:
+                    has_any_group = True
+                    last_col = col
+
+            if not has_any_group:
+                last_col = 10
+
+        for row in range(12, last_row + 1):
+            for col in range(1, last_col + 1):
+                cell = ws.cell(row=row, column=col)
+
+                if col == 1:
+                    cell.border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style='thin'),
+                        bottom=Side(style='thin')
+                    )
+                else:
+                    cell.border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style='thin'),
+                        bottom=Side(style='thin')
+                    )
+
+        for day_idx in range(6):
+            day_start_row = 14 + (day_idx * 11)
+            day_end_row = day_start_row + 10
+
+            for row in range(day_start_row, day_end_row + 1):
+                cell = ws.cell(row=row, column=1)
+
+                if row == day_start_row:
+                    cell.border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style='thin'),
+                        bottom=Side(style=None)
+                    )
+                elif row == day_end_row:
+                    cell.border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style=None),
+                        bottom=Side(style='thin')
+                    )
+                else:
+                    cell.border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style=None),
+                        bottom=Side(style=None)
+                    )
 
     def _adjust_column_widths(self, ws):
-        """
-        Настраивает ширину колонок
-        """
-        # Фиксированные колонки
+
         ws.column_dimensions['A'].width = 5
         ws.column_dimensions['B'].width = 6
         ws.column_dimensions['C'].width = 15
