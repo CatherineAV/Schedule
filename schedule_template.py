@@ -160,7 +160,7 @@ class SimpleTemplateGenerator:
             elif col == 'B':
                 ws[f'{col}{header_row}'] = 'Уроки'
             elif col == 'C':
-                ws[f'{col}{header_row}'] = 'Расписание звонков на ул. Радио'
+                ws[f'{col}{header_row}'] = 'Расписание звонков'
 
             cell = ws[f'{col}{header_row}']
             cell.font = Font(bold=True)
