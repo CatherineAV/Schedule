@@ -243,13 +243,14 @@ class DataTableManager:
 
 class SearchFilterBar:
     def __init__(self, on_search: Callable = None, on_filter: Callable = None,
-                 section_name: str = "", db_operations=None):
+                 section_name: str = "", db_operations=None,
+                 initial_search: str = "", initial_filters: Dict = None):
         self.on_search = on_search
         self.on_filter = on_filter
         self.section_name = section_name
         self.db_ops = db_operations
-        self.current_search = ""
-        self.current_filters = {}
+        self.current_search = initial_search
+        self.current_filters = initial_filters.copy() if initial_filters else {}
 
         self.teachers = []
         self.subjects = []
@@ -268,6 +269,7 @@ class SearchFilterBar:
             on_change=self._on_search_change,
             prefix_icon=ft.Icons.SEARCH,
             border_radius=5,
+            value=self.current_search,
         )
 
         self.filter_button = ft.IconButton(

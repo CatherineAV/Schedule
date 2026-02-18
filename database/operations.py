@@ -72,9 +72,9 @@ class DBOperations:
     def get_groups(self) -> List[Dict[str, Any]]:
         try:
             query = """
-            SELECT ID, Группа, Подгруппа, Самообразование, [Разговоры о важном] 
-            FROM Группы 
-            ORDER BY Группа, Подгруппа
+                SELECT ID, Группа, Подгруппа, Самообразование, [Разговоры о важном] 
+                FROM Группы 
+                ORDER BY Группа COLLATE NOCASE, Подгруппа COLLATE NOCASE
             """
             return self.db.execute_query(query)
         except Exception as e:
@@ -210,7 +210,7 @@ class DBOperations:
     # ========== МОДУЛИ ==========
     def get_modules(self) -> List[Dict[str, Any]]:
         try:
-            return self.db.execute_query("SELECT ID, Код, Название FROM Модули ORDER BY Код")
+            return self.db.execute_query("SELECT ID, Код, Название FROM Модули ORDER BY Код COLLATE NOCASE")
         except Exception as e:
             print(f"Ошибка при получении модулей: {e}")
             return []
@@ -264,7 +264,7 @@ class DBOperations:
         try:
             result = self.db.execute_query(
                 "SELECT COUNT(*) as count FROM Дисциплины WHERE Дисциплина = ? AND Модуль = ?",
-                (name, module)
+                (name.strip(), module.strip())
             )
             return result[0]['count'] > 0 if result else False
         except Exception as e:
@@ -274,14 +274,14 @@ class DBOperations:
     def get_subjects_with_module_names(self) -> List[Dict[str, Any]]:
         try:
             query = """
-            SELECT 
-                d.ID, 
-                d.Дисциплина as Дисциплина, 
-                d.Модуль as [Код модуля],
-                m.Название as [Название модуля]
-            FROM Дисциплины d
-            LEFT JOIN Модули m ON d.Модуль = m.Код
-            ORDER BY d.ID
+                SELECT 
+                    d.ID, 
+                    d.Дисциплина as Дисциплина, 
+                    d.Модуль as [Код модуля],
+                    m.Название as [Название модуля]
+                FROM Дисциплины d
+                LEFT JOIN Модули m ON d.Модуль = m.Код
+                ORDER BY d.Модуль COLLATE NOCASE, d.Дисциплина COLLATE NOCASE
             """
             subjects = self.db.execute_query(query)
 
@@ -369,7 +369,7 @@ class DBOperations:
     def get_territories(self) -> List[Dict[str, Any]]:
         try:
             return self.db.execute_query(
-                "SELECT ID, Территория, Цвет FROM Территории ORDER BY Территория")
+                "SELECT ID, Территория, Цвет FROM Территории ORDER BY Территория COLLATE NOCASE")
         except Exception as e:
             print(f"Ошибка при получении территорий: {e}")
             return []
@@ -377,14 +377,14 @@ class DBOperations:
     def get_classrooms_with_territory_names(self) -> List[Dict[str, Any]]:
         try:
             query = """
-            SELECT 
+                SELECT 
                 к.ID, 
                 к.Кабинет as [Номер кабинета],
                 т.Территория as Территория,
                 к.Вместимость
             FROM Кабинеты к
             LEFT JOIN Территории т ON к.ТерриторияID = т.ID
-            ORDER BY т.Территория, к.Кабинет
+            ORDER BY т.Территория COLLATE NOCASE, к.Кабинет COLLATE NOCASE
             """
             return self.db.execute_query(query)
         except Exception as e:
@@ -484,12 +484,12 @@ class DBOperations:
     def get_teachers_with_preferences(self) -> List[Dict[str, Any]]:
         try:
             query = """
-                SELECT ID, ФИО, 
-                       CASE WHEN Совместитель = 1 THEN 'Да' ELSE 'Нет' END as Совместитель,
-                       COALESCE([Дни занятий], 'Любые') as [Дни занятий]
-                FROM Преподаватели 
-                ORDER BY ФИО
-                """
+                    SELECT ID, ФИО, 
+                           CASE WHEN Совместитель = 1 THEN 'Да' ELSE 'Нет' END as Совместитель,
+                           COALESCE([Дни занятий], 'Любые') as [Дни занятий]
+                    FROM Преподаватели 
+                    ORDER BY ФИО COLLATE NOCASE
+                    """
             teachers = self.db.execute_query(query)
 
             for teacher in teachers:
@@ -619,19 +619,19 @@ class DBOperations:
     def get_workloads(self) -> List[Dict[str, Any]]:
         try:
             query = """
-            SELECT 
-                н.ID,
-                п.ФИО as Преподаватель,
-                д.Дисциплина as Дисциплина,
-                г.Группа,
-                г.Подгруппа,
-                н.Часы as [Часы в неделю]
-            FROM Нагрузка н
-            LEFT JOIN Преподаватели п ON н.ПреподавательID = п.ID
-            LEFT JOIN Дисциплины д ON н.ДисциплинаID = д.ID
-            LEFT JOIN Группы г ON н.ГруппаID = г.ID
-            ORDER BY п.ФИО, д.Дисциплина, г.Группа
-            """
+                SELECT 
+                    н.ID,
+                    п.ФИО as Преподаватель,
+                    д.Дисциплина as Дисциплина,
+                    г.Группа,
+                    г.Подгруппа,
+                    н.Часы as [Часы в неделю]
+                FROM Нагрузка н
+                LEFT JOIN Преподаватели п ON н.ПреподавательID = п.ID
+                LEFT JOIN Дисциплины д ON н.ДисциплинаID = д.ID
+                LEFT JOIN Группы г ON н.ГруппаID = г.ID
+                ORDER BY п.ФИО COLLATE NOCASE, д.Дисциплина COLLATE NOCASE, г.Группа COLLATE NOCASE, г.Подгруппа COLLATE NOCASE
+                """
             return self.db.execute_query(query)
         except Exception as e:
             print(f"Ошибка при получении нагрузки: {e}")

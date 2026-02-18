@@ -242,7 +242,17 @@ class DataMenu(BasePage):
 
 
 class DataPane(BasePage):
+    def __init__(self, menu_column: ft.Column, content: ft.Container,
+                 page: ft.Page, db_ops: DBOperations, toast: Toast):
+        super().__init__(menu_column, content, page, db_ops, toast)
+        self.current_section = None
+        self.current_search_text = ""
+        self.current_filters = {}
+        self.search_bar = None
+
     def render(self, section_name: str):
+        self.current_section = section_name
+
         if section_name == "Группы":
             data = self.db_ops.get_groups()
             columns = ["ID", "Группа", "Подгруппа", "Самообразование", "Разговоры о важном"]
@@ -269,7 +279,9 @@ class DataPane(BasePage):
             columns = self.db_ops.get_table_columns(section_name)
 
         selected_row = self.table_manager.get_selected_row(section_name)
-        self.filtered_data = data.copy()
+        self.filtered_data = self._apply_filters_to_data(
+            data.copy(), section_name, self.current_search_text, self.current_filters
+        )
 
         def on_row_select(index):
             refresh_table()
@@ -291,62 +303,29 @@ class DataPane(BasePage):
             self.page.update()
 
         def filter_data(search_text):
-            if not search_text:
-                self.filtered_data = data.copy()
-            else:
-                self.filtered_data = []
-                search_lower = search_text.lower()
-                for row in data:
-                    match_found = False
-                    for col in columns:
-                        if col != 'ID' and col in row:
-                            value = str(row.get(col, "")).lower()
-                            if search_lower in value:
-                                match_found = True
-                                break
-                    if match_found:
-                        self.filtered_data.append(row)
+            self.current_search_text = search_text
+            self.filtered_data = self._apply_filters_to_data(
+                data.copy(), section_name, search_text, self.current_filters
+            )
             refresh_table()
 
         def apply_filters(filters):
-            if not filters:
-                self.filtered_data = data.copy()
-            else:
-                filtered = data.copy()
-                if section_name == "Дисциплины" and 'modules' in filters and filters['modules']:
-                    selected_modules = filters['modules']
-                    filtered = [row for row in filtered if row.get('Код модуля', '') in selected_modules]
-                elif section_name == "Нагрузка":
-                    for key, value in filters.items():
-                        if value:
-                            if key == 'teacher':
-                                filtered = [row for row in filtered if row.get('Преподаватель', '') == value]
-                            elif key == 'subject':
-                                filtered = [row for row in filtered if row.get('Дисциплина', '') == value]
-                            elif key == 'group':
-                                if ' - ' in value:
-                                    group_name, subgroup = value.split(' - ')
-                                    filtered = [row for row in filtered if
-                                                row.get('Группа', '') == group_name and
-                                                row.get('Подгруппа', '') == subgroup]
-                                else:
-                                    filtered = [row for row in filtered if row.get('Группа', '') == value]
-
-                            elif key == 'with_subgroups_only' and value:
-                                filtered = [row for row in filtered if
-                                            row.get('Подгруппа', '') and
-                                            row.get('Подгруппа', '') != 'Нет' and
-                                            row.get('Подгруппа', '') != 'None']
-                self.filtered_data = filtered
+            self.current_filters = filters
+            self.filtered_data = self._apply_filters_to_data(
+                data.copy(), section_name, self.current_search_text, filters
+            )
             refresh_table()
 
         search_bar = SearchFilterBar(
             on_search=filter_data,
             on_filter=apply_filters,
             section_name=section_name,
-            db_operations=self.db_ops
+            db_operations=self.db_ops,
+            initial_search=self.current_search_text,
+            initial_filters=self.current_filters
         )
         search_bar.page = self.page
+        self.search_bar = search_bar
 
         if section_name == "Дисциплины":
             modules = self.db_ops.get_modules()
@@ -371,6 +350,24 @@ class DataPane(BasePage):
             tooltip="Добавить запись",
             on_click=lambda e: self._render_add_form(section_name, columns),
         )
+
+        def filter_data(search_text):
+            if not search_text:
+                self.filtered_data = data.copy()
+            else:
+                self.filtered_data = []
+                search_lower = search_text.lower()
+                for row in data:
+                    match_found = False
+                    for col in columns:
+                        if col != 'ID' and col in row:
+                            value = str(row.get(col, "")).lower()
+                            if search_lower in value:
+                                match_found = True
+                                break
+                    if match_found:
+                        self.filtered_data.append(row)
+            refresh_table()
 
         def edit_selected_record(e):
             selected_row_index = self.table_manager.get_selected_row(section_name)
@@ -508,6 +505,66 @@ class DataPane(BasePage):
         ], expand=True)
 
         self.page.update()
+
+    def _apply_filters_to_data(self, data, section_name, search_text, filters):
+        filtered = data.copy()
+
+        # Применяем поиск
+        if search_text:
+            search_lower = search_text.lower()
+            filtered = []
+            for row in data:
+                match_found = False
+                for key, value in row.items():
+                    if key != 'ID' and value is not None:
+                        if search_lower in str(value).lower():
+                            match_found = True
+                            break
+                if match_found:
+                    filtered.append(row)
+
+        # Применяем фильтры
+        if filters:
+            temp_filtered = filtered.copy()
+            filtered = []
+
+            for row in temp_filtered:
+                match = True
+
+                if section_name == "Дисциплины" and 'modules' in filters and filters['modules']:
+                    if row.get('Код модуля', '') not in filters['modules']:
+                        match = False
+
+                elif section_name == "Нагрузка":
+                    for key, value in filters.items():
+                        if not value:
+                            continue
+                        if key == 'teacher' and row.get('Преподаватель', '') != value:
+                            match = False
+                            break
+                        elif key == 'subject' and row.get('Дисциплина', '') != value:
+                            match = False
+                            break
+                        elif key == 'group':
+                            if ' - ' in value:
+                                group_name, subgroup = value.split(' - ')
+                                if row.get('Группа', '') != group_name or row.get('Подгруппа', '') != subgroup:
+                                    match = False
+                                    break
+                            else:
+                                if row.get('Группа', '') != value:
+                                    match = False
+                                    break
+                        elif key == 'with_subgroups_only' and value:
+                            subgroup = row.get('Подгруппа', '')
+                            if not subgroup or subgroup == 'Нет' or subgroup == 'None':
+                                match = False
+                                break
+
+                if match:
+                    filtered.append(row)
+
+        return filtered
 
     def _render_add_form(self, table_name: str, columns: List[str]):
         if table_name == "Группы":
