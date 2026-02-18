@@ -205,7 +205,7 @@ class SimpleTemplateGenerator:
                     else:
                         sub_cell.value = subgroup
 
-                    sub_cell.font = Font(italic=True)
+                    sub_cell.font = Font(size=9)
                     sub_cell.alignment = Alignment(horizontal='center', vertical='center')
 
                 current_col += subgroup_count
@@ -283,7 +283,7 @@ class SimpleTemplateGenerator:
                                 vertical='center',
                                 wrap_text=True
                             )
-                            cell.font = Font(italic=True, bold=True, size=10)
+                            cell.font = Font(bold=True, size=10)
 
                             current_col += subgroup_count
                         else:
