@@ -159,6 +159,46 @@ class DataTableManager:
             if row_height > max_row_height:
                 max_row_height = row_height
 
+        custom_columns = []
+        for col in display_columns:
+            header_text = pretty_column_names.get(col, col)
+
+            if col == "Дисциплина":
+                custom_columns.append(
+                    ft.DataColumn(
+                        ft.Container(
+                            content=ft.Text(
+                                header_text,
+                                weight="bold",
+                                color=PALETTE[2],
+                                size=14,
+                                text_align=ft.TextAlign.LEFT,
+                                no_wrap=False,
+                            ),
+                            width=300,
+                            alignment=ft.alignment.center_left,
+                            padding=ft.padding.only(left=8, right=8, top=4, bottom=4),
+                        )
+                    )
+                )
+            else:
+                custom_columns.append(
+                    ft.DataColumn(
+                        ft.Container(
+                            content=ft.Text(
+                                header_text,
+                                weight="bold",
+                                color=PALETTE[2],
+                                size=14,
+                                text_align=ft.TextAlign.LEFT,
+                            ),
+                            alignment=ft.alignment.center_left,
+                            padding=ft.padding.only(left=8, right=8, top=4, bottom=4),
+                        )
+                    )
+                )
+
+        # ===== СОЗДАНИЕ СТРОК ДАННЫХ =====
         for i, row in enumerate(data):
             cells = []
             for col in display_columns:
@@ -201,9 +241,35 @@ class DataTableManager:
                     )
                     cell_content = ft.Row([color_container, ft.Text(value, color=PALETTE[2])], spacing=10)
                 else:
-                    cell_content = ft.Text(str(value), color=PALETTE[2], no_wrap=False)
+                    if col == "Дисциплина":
+                        cell_content = ft.Container(
+                            content=ft.Text(
+                                str(value),
+                                color=PALETTE[2],
+                                no_wrap=False,
+                                size=14,
+                                text_align=ft.TextAlign.LEFT
+                            ),
+                            width=300,
+                            alignment=ft.alignment.center_left,
+                            padding=ft.padding.only(left=8, right=8, top=4, bottom=4),
+                        )
+                    else:
+                        cell_content = ft.Text(
+                            str(value),
+                            color=PALETTE[2],
+                            no_wrap=False,
+                            size=14,
+                            text_align=ft.TextAlign.LEFT
+                        )
 
-                cell = ft.DataCell(ft.Container(cell_content, expand=True, alignment=ft.alignment.center_left))
+                cell = ft.DataCell(
+                    ft.Container(
+                        content=cell_content,
+                        alignment=ft.alignment.center_left,
+                        padding=ft.padding.only(left=8, right=8, top=4, bottom=4)
+                    )
+                )
                 cells.append(cell)
 
             data_row = ft.DataRow(
@@ -213,16 +279,15 @@ class DataTableManager:
             )
             data_rows.append(data_row)
 
-        display_column_headers = [pretty_column_names.get(col, col) for col in display_columns]
-
         return ft.DataTable(
-            columns=[ft.DataColumn(ft.Text(c, weight="bold", color=PALETTE[2])) for c in display_column_headers],
+            columns=custom_columns,
             rows=data_rows,
             expand=True,
             divider_thickness=0,
             data_row_color={ft.ControlState.SELECTED: PALETTE[4]},
             data_row_min_height=40,
             data_row_max_height=max_row_height,
+            column_spacing=50,
         )
 
     def _on_row_select(self, e, index: int, section_name: str, on_row_select: Callable):

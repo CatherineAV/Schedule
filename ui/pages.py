@@ -340,7 +340,7 @@ class DataPane(BasePage):
             expand=True,
             spacing=0,
             padding=0,
-            auto_scroll=False
+            auto_scroll=False,
         )
 
         add_button = ft.IconButton(
