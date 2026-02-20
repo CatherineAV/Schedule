@@ -1,14 +1,13 @@
 import flet as ft
-import os, platform, subprocess
-from datetime import datetime
+import os, platform, subprocess, traceback
 from typing import List, Dict
+from datetime import datetime
+from schedule_generator import ScheduleGenerator
 from database.operations import DBOperations
 from database.settings_manager import SettingsManager
 from ui.components import PALETTE, Toast, DataTableManager, SearchFilterBar
 from ui.forms import ModuleForm, StreamForm, GroupsManagementForm
 from ui.forms import MultiWorkloadForm, WorkloadForm, ClassroomForm, TeacherForm, GroupForm, SubjectForm, TerritoryForm
-from schedule_template import SimpleTemplateGenerator
-
 
 class BasePage:
     def __init__(self, menu_column: ft.Column, content: ft.Container,
@@ -63,45 +62,50 @@ class MainMenu(BasePage):
 
     def _on_generate_click(self, e):
         try:
-            generator = SimpleTemplateGenerator(self.db_ops)
+            generator = ScheduleGenerator(self.db_ops)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = f"generated/schedule_template_{timestamp}.xlsx"
+            output_path = f"schedules/schedule_{timestamp}.xlsx"
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = f"generated/schedule_groups_{timestamp}.xlsx"
+            # Создаем папку если нет
+            os.makedirs("schedules", exist_ok=True)
 
-            os.makedirs("generated", exist_ok=True)
+            # Показываем сообщение о начале
+            self.toast.show("Начинаю генерацию расписания...", success=True)
 
-            self.toast.show("Начинаю генерацию шаблона с группами...", success=True)
-
+            # Обновляем контент для показа прогресса
             self.content.content = self._create_loading_screen(
-                "Загрузка групп из базы данных..."
+                "Генерация расписания...\nЭто может занять несколько минут"
             )
             self.page.update()
 
-            result_path = generator.generate_template_with_groups(output_path)
+            # Генерируем расписание
+            result_path = generator.generate_schedule(output_path)
+
+            # Показываем результат
             self.content.content = self._create_success_screen(result_path)
-            self.toast.show(f"Шаблон с группами создан!", success=True)
+            self.toast.show(f"Расписание успешно сгенерировано!", success=True)
 
         except Exception as ex:
             self.content.content = self._create_error_screen(str(ex))
             self.toast.show(f"Ошибка при генерации: {str(ex)}", success=False)
+            traceback.print_exc()
 
     def _create_loading_screen(self, message: str) -> ft.Column:
+        """Создает экран загрузки"""
         return ft.Column([
-            ft.Text("Генерация шаблона", size=24, weight="bold", color=PALETTE[2]),
+            ft.Text("Генерация расписания", size=24, weight="bold", color=PALETTE[2]),
             ft.Divider(height=20, color=PALETTE[1]),
             ft.ProgressRing(width=50, height=50, stroke_width=3),
             ft.Container(height=20),
-            ft.Text(message, size=16, color=PALETTE[0]),
+            ft.Text(message, size=16, color=PALETTE[0], text_align=ft.TextAlign.CENTER),
             ft.Text("Пожалуйста, подождите...", color=PALETTE[0], italic=True)
         ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
 
     def _create_success_screen(self, file_path: str) -> ft.Column:
 
         return ft.Column([
-            ft.Text("Шаблон создан!", size=24, weight="bold", color=PALETTE[2]),
+            ft.Text("Расписание создано!", size=24, weight="bold", color=PALETTE[2]),
             ft.Divider(height=20, color=PALETTE[1]),
             ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=60),
             ft.Container(height=20),
